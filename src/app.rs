@@ -129,7 +129,7 @@ impl App {
                 .column(Column::exact(65.0))
                 .column(Column::exact(65.0))
                 .column(Column::initial(160.0).range(40.0..=200.0).resizable(true))
-                .column(Column::initial(140.0).range(40.0..=200.0).resizable(true))
+                .column(Column::initial(160.0).range(40.0..=200.0).resizable(true))
                 .column(Column::exact(40.0))
                 .min_scrolled_height(0.0);
 
