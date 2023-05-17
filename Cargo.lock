@@ -876,7 +876,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kynseed_saveedit_rs"
+name = "kynseed_saveedit_egui"
 version = "0.1.0"
 dependencies = [
  "confy",
