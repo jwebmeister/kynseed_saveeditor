@@ -1,3 +1,3 @@
-# kynseed_saveedit_rs
+# kynseed_saveedit_egui
 
-kynseed_saveedit_rs
+kynseed_saveedit_egui
