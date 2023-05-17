@@ -1,0 +1,9 @@
+Lantern
+Watering_Can
+Lute
+Slingshot
+Fishing_Rod
+Rainstick
+Obscura
+Blizzard_Staff
+Lightning_Rod
