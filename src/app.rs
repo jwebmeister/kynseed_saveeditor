@@ -66,7 +66,8 @@ impl App {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Save").clicked() {
-                        write_savedata(&self.appconfig, &mut self.sm)
+                        write_savedata(&self.appconfig, &mut self.sm);
+                        ui.close_menu();
                     };
                     if ui.button("Quit").clicked() {
                         _frame.close();
@@ -76,11 +77,13 @@ impl App {
                     if ui.button("Give me 800 qty!").clicked() {
                         set_save_items_qty_800(&mut self.sm, &self.lm, Some(&self.arm));
                         self.update_allitems_fromref();
+                        ui.close_menu();
 
                     };
                     if ui.button("Give me 100 qty in larder").clicked() {
                         set_larders_qty_100(&mut self.sm, &self.lm, Some(&self.arm));
                         self.update_allitems_fromref();
+                        ui.close_menu();
                     };
                     if ui.button("Sort by type, name").clicked() {
                         self.save_inventory_items.sort_by(|a,b| 
@@ -88,11 +91,13 @@ impl App {
                             let second = a.name.cmp(&b.name);
                             first.then(second)}
                         );
+                        ui.close_menu();
                     };
                     if ui.button("Sort by UID").clicked() {
                         self.save_inventory_items.sort_by(|a,b| 
                             {a.uid.cmp(&b.uid)}
                         );
+                        ui.close_menu();
                     };
                     if ui.button("Sort by cost, name").clicked() {
                         self.save_inventory_items.sort_by(|a,b| 
@@ -100,6 +105,7 @@ impl App {
                             let second = a.name.cmp(&b.name);
                             first.then(second)}
                         );
+                        ui.close_menu();
                     };
                 });
             });
@@ -200,7 +206,7 @@ impl eframe::App for App {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let Self {  
             appconfig: _,
             lm: _,
@@ -209,8 +215,9 @@ impl eframe::App for App {
             arm: _
         } = self;
         
-        self.top_panel(ctx, _frame);
-        self.central_panel(ctx, _frame);
+        self.top_panel(ctx, frame);
+        self.central_panel(ctx, frame);
+        frame.set_window_size(ctx.used_size());
     }
 }
 
