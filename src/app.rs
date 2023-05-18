@@ -3,20 +3,34 @@ use std::path::PathBuf;
 use std::io::Write;
 
 
-use egui::{DragValue};
-
 use crate::config;
 use crate::lootitems;
 use crate::savedata;
 use crate::apothrecipes;
 
+pub struct ShowUIState {
+    options_window: bool,
+    top_panel: bool,
+    central_panel: bool,
+}
+
+impl Default for ShowUIState {
+    fn default() -> Self {
+        Self {
+            options_window: false,
+            top_panel: true,
+            central_panel: true,
+        }
+    }
+}
 
 pub struct App {
     appconfig : config::AppConfig,
     lm: lootitems::LootManager,
     sm: savedata::SaveDataManager,
     save_inventory_items: Vec<AppSaveInventoryItem>,
-    arm: apothrecipes::ApothRecipeManager
+    arm: apothrecipes::ApothRecipeManager,
+    show_ui_state: ShowUIState,
 }
 
 impl App {
@@ -55,11 +69,137 @@ impl App {
             lm,
             sm,
             save_inventory_items,
-            arm
+            arm,
+            show_ui_state: ShowUIState::default()
         }
     }
 
-    pub fn top_panel(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    pub fn reload_data(&mut self) {
+        let config_filepath = config::get_config_filepath();
+        self.appconfig = confy::load_path(config_filepath.as_path()).unwrap();
+
+        self.lm.clear_data();
+        self.lm.load_data(&self.appconfig).unwrap();
+
+        self.sm.clear_data();
+        self.sm.load_data(&self.appconfig);
+
+        self.save_inventory_items = Vec::new();
+
+        for siir in self.sm.save_inventory_ref.iter() {
+            let sii = AppSaveInventoryItem::new(siir, &self.sm, &self.lm);
+            self.save_inventory_items.push(sii);
+        };
+
+        self.save_inventory_items.sort_by(|a,b| 
+            {let first = a.pickup_type_name.cmp(&b.pickup_type_name);
+            let second = a.name.cmp(&b.name);
+            first.then(second)}
+        );
+
+        self.arm.clear_data();
+        self.arm.load_data(&self.appconfig);
+        
+    }
+
+    pub fn options_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::Window::new("Options")
+            .open(&mut self.show_ui_state.options_window)
+            .default_width(300.0)
+            .vscroll(true)
+            .show(ctx, |ui| {
+                ui.horizontal(|contents| {
+                    if contents.button("Save").clicked() {
+                        let config_filepath = config::get_config_filepath();
+                        confy::store_path(config_filepath.as_path(), self.appconfig.clone()).unwrap();
+                    };
+                    if contents.button("Reload").clicked() {
+                        let config_filepath = config::get_config_filepath();
+                        self.appconfig = confy::load_path(config_filepath.as_path()).unwrap();
+
+                        self.lm.clear_data();
+                        self.lm.load_data(&self.appconfig).unwrap();
+
+                        self.sm.clear_data();
+                        self.sm.load_data(&self.appconfig);
+
+                        self.save_inventory_items = Vec::new();
+
+                        for siir in self.sm.save_inventory_ref.iter() {
+                            let sii = AppSaveInventoryItem::new(siir, &self.sm, &self.lm);
+                            self.save_inventory_items.push(sii);
+                        };
+
+                        self.save_inventory_items.sort_by(|a,b| 
+                            {let first = a.pickup_type_name.cmp(&b.pickup_type_name);
+                            let second = a.name.cmp(&b.name);
+                            first.then(second)}
+                        );
+
+                        self.arm.clear_data();
+                        self.arm.load_data(&self.appconfig);
+                    };
+                    if contents.button("Reset to default").clicked() {
+                        self.appconfig = config::AppConfig::default();
+                    };
+                });
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("path_kynseed_data"));
+                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.path_kynseed_data).desired_width(f32::INFINITY));
+                });
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("path_kynseed_saves"));
+                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.path_kynseed_saves).desired_width(f32::INFINITY));
+                });
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("path_saveedit_data"));
+                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.path_saveedit_data).desired_width(f32::INFINITY));
+                });
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("filename_kynseed_save"));
+                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_kynseed_save).desired_width(f32::INFINITY));
+                });
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("filenames_kynseed_items"));
+                    contents.vertical(|vcontents| {
+                        self.appconfig.filenames_kynseed_items.iter_mut().for_each(|x| {
+                            vcontents.add(egui::TextEdit::singleline(x).desired_width(f32::INFINITY));
+                        });
+                        vcontents.horizontal(|hcontents| {
+                            if hcontents.button("+").clicked() {self.appconfig.filenames_kynseed_items.push("".to_string())};
+                            if hcontents.button("-").clicked() {self.appconfig.filenames_kynseed_items.pop();};
+                        });
+                        
+                    });
+                });
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("filename_kynseed_apothrecipes"));
+                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_kynseed_apothrecipes).desired_width(f32::INFINITY));
+                });
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("filename_saveedit_has_star_rating_conditions"));
+                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_has_star_rating_conditions).desired_width(f32::INFINITY));
+                });
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("filename_saveedit_hide_quantity_items"));
+                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_hide_quantity_items).desired_width(f32::INFINITY));
+                });
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("filename_saveedit_name_item_lookup"));
+                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_name_item_lookup).desired_width(f32::INFINITY));
+                });
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("filename_saveedit_liquid_items"));
+                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_liquid_items).desired_width(f32::INFINITY));
+                });
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("filename_saveedit_pickup_types"));
+                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_pickup_types).desired_width(f32::INFINITY));
+                });
+            });
+    }
+
+    pub fn top_panel(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         #[cfg(not(target_arch = "wasm32"))] // no File->Quit on web pages!
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
@@ -69,8 +209,12 @@ impl App {
                         write_savedata(&self.appconfig, &mut self.sm);
                         ui.close_menu();
                     };
+                    if ui.button("Options").clicked() {
+                        self.show_ui_state.options_window = !self.show_ui_state.options_window;
+                        ui.close_menu();
+                    };
                     if ui.button("Quit").clicked() {
-                        _frame.close();
+                        frame.close();
                     };
                 });
                 ui.menu_button("Inventory", |ui| {
@@ -172,7 +316,7 @@ impl App {
                         });
                         for count_index in 0..5 {
                             row.col(|ui| {
-                                let dragvalue_response = ui.add(DragValue::new(&mut self.save_inventory_items[row_index].counts[count_index].count));
+                                let dragvalue_response = ui.add(egui::DragValue::new(&mut self.save_inventory_items[row_index].counts[count_index].count));
                                 if dragvalue_response.changed() {
                                     let new_count = self.save_inventory_items[row_index].save_item_ref.set_count_at_idx(
                                         count_index, 
@@ -212,11 +356,14 @@ impl eframe::App for App {
             lm: _,
             sm: _,
             save_inventory_items: _,
-            arm: _
+            arm: _,
+            show_ui_state: _,
         } = self;
         
-        self.top_panel(ctx, frame);
-        self.central_panel(ctx, frame);
+        if self.show_ui_state.top_panel {self.top_panel(ctx, frame)};
+        if self.show_ui_state.central_panel {self.central_panel(ctx, frame)};
+        if self.show_ui_state.options_window {self.options_window(ctx, frame)};
+
         frame.set_window_size(ctx.used_size());
     }
 }

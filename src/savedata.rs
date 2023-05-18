@@ -99,6 +99,22 @@ impl Default for SaveDataManager {
 
 impl SaveDataManager {
 
+    pub fn clear_data(&mut self) {
+        self.root = None;
+        self.doc_el = None;
+        self.playerdata_node = None;
+        self.brass_count_node = None;
+        self.tool_levelling_node = None;
+        self.inventory_node = None;
+        self.allitems_node = None;
+        self.save_inventory_ref.clear();
+        self.newlarder_node = None;
+        self.newlarder_item_ref.clear();
+        self.savedshops_node = None;
+        self.savedshops_item_ref.clear();
+        self.xtree = xot::Xot::new();
+    }
+
     pub fn load_data(&mut self, appconfig: &AppConfig) {
 
         let filepath_savegame = PathBuf::from_iter([&appconfig.path_kynseed_saves, &appconfig.filename_kynseed_save]);

@@ -72,6 +72,14 @@ impl ApothRecipeManager {
         known_duds.contains(&uid)
     }
 
+    pub fn clear_data(&mut self) {
+        self.root = None;
+        self.doc_el = None;
+        self.apothrecipes_node = None;
+        self.all_cures.clear();
+        self.xtree = xot::Xot::new();
+    }
+
     pub fn load_data(&mut self, appconfig: &AppConfig) {
 
         let filepath_apothrecipes = PathBuf::from_iter([&appconfig.path_kynseed_data, &appconfig.filename_kynseed_apothrecipes]);

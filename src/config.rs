@@ -8,7 +8,7 @@ pub fn get_config_filepath() -> PathBuf {
     config_folder.join("saveedit_appconfig.toml")
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct AppConfig {
     pub path_kynseed_data: String,
     pub path_kynseed_saves: String,
