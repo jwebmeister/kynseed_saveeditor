@@ -2,6 +2,8 @@
 
 Savegame editor for the video game "Kynseed" by PixelCount Studios.
 
+![Alt text](/../docs/docs/pics/kynseed_saveeditor_001.jpg?raw=true "kynseed_saveeditor")
+
 ## Version history & features
 ### v0.1
 - Inventory table
