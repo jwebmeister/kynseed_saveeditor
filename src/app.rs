@@ -12,6 +12,7 @@ pub struct ShowUIState {
     options_window: bool,
     top_panel: bool,
     central_panel: bool,
+    error_during_load: bool,
 }
 
 impl Default for ShowUIState {
@@ -20,6 +21,7 @@ impl Default for ShowUIState {
             options_window: false,
             top_panel: true,
             central_panel: true,
+            error_during_load: false,
         }
     }
 }
@@ -38,31 +40,59 @@ impl App {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
 
+        let mut show_ui_state = ShowUIState::default();
+
         let config_filepath = config::get_config_filepath();
         let appconfig: config::AppConfig = confy::load_path(config_filepath.as_path()).unwrap();
 
         let mut lm = lootitems::LootManager::default();
         lm.clear_data();
-        lm.load_data(&appconfig).unwrap();
+        match lm.load_data(&appconfig) {
+            Ok(..) => {},
+            _ => {
+                println!("Unable to load loot manager data"); 
+                show_ui_state.error_during_load = true;
+            } 
+        };
 
         let mut sm = savedata::SaveDataManager::default();
-        sm.load_data(&appconfig);
+        sm.clear_data();
+        match sm.load_data(&appconfig) {
+            Ok(..) => {},
+            _ => {
+                println!("Unable to load save data"); 
+                show_ui_state.error_during_load = true;
+            } 
+        };
 
         let mut save_inventory_items: Vec<AppSaveInventoryItem>  = Vec::new();
 
-        for siir in sm.save_inventory_ref.iter() {
-            let sii = AppSaveInventoryItem::new(siir, &sm, &lm);
-            save_inventory_items.push(sii);
-        };
-
-        save_inventory_items.sort_by(|a,b| 
-            {let first = a.pickup_type_name.cmp(&b.pickup_type_name);
-            let second = a.name.cmp(&b.name);
-            first.then(second)}
-        );
+        match show_ui_state.error_during_load {
+            true => {
+                show_ui_state.options_window = true;
+            },
+            false => {
+                for siir in sm.save_inventory_ref.iter() {
+                    let sii = AppSaveInventoryItem::new(siir, &sm, &lm);
+                    save_inventory_items.push(sii);
+                };
+        
+                save_inventory_items.sort_by(|a,b| 
+                    {let first = a.pickup_type_name.cmp(&b.pickup_type_name);
+                    let second = a.name.cmp(&b.name);
+                    first.then(second)}
+                );
+            }
+        }
 
         let mut arm = apothrecipes::ApothRecipeManager::default();
-        arm.load_data(&appconfig);
+        match arm.load_data(&appconfig) {
+            Ok(..) => {},
+            _ => {
+                println!("Unable to load apoth manager data, not blocking");
+                arm.clear_data();
+            } 
+        }
 
         Self {
             appconfig,
@@ -70,37 +100,10 @@ impl App {
             sm,
             save_inventory_items,
             arm,
-            show_ui_state: ShowUIState::default()
+            show_ui_state,
         }
     }
 
-    pub fn reload_data(&mut self) {
-        let config_filepath = config::get_config_filepath();
-        self.appconfig = confy::load_path(config_filepath.as_path()).unwrap();
-
-        self.lm.clear_data();
-        self.lm.load_data(&self.appconfig).unwrap();
-
-        self.sm.clear_data();
-        self.sm.load_data(&self.appconfig);
-
-        self.save_inventory_items = Vec::new();
-
-        for siir in self.sm.save_inventory_ref.iter() {
-            let sii = AppSaveInventoryItem::new(siir, &self.sm, &self.lm);
-            self.save_inventory_items.push(sii);
-        };
-
-        self.save_inventory_items.sort_by(|a,b| 
-            {let first = a.pickup_type_name.cmp(&b.pickup_type_name);
-            let second = a.name.cmp(&b.name);
-            first.then(second)}
-        );
-
-        self.arm.clear_data();
-        self.arm.load_data(&self.appconfig);
-        
-    }
 
     pub fn options_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::Window::new("Options")
@@ -118,10 +121,22 @@ impl App {
                         self.appconfig = confy::load_path(config_filepath.as_path()).unwrap();
 
                         self.lm.clear_data();
-                        self.lm.load_data(&self.appconfig).unwrap();
+                        match self.lm.load_data(&self.appconfig) {
+                            Ok(..) => {},
+                            _ => {
+                                println!("Unable to load loot manager data"); 
+                                self.show_ui_state.error_during_load = true;
+                            } 
+                        };
 
                         self.sm.clear_data();
-                        self.sm.load_data(&self.appconfig);
+                        match self.sm.load_data(&self.appconfig) {
+                            Ok(..) => {},
+                            _ => {
+                                println!("Unable to load save data"); 
+                                self.show_ui_state.error_during_load = true;
+                            } 
+                        };
 
                         self.save_inventory_items = Vec::new();
 
@@ -137,7 +152,12 @@ impl App {
                         );
 
                         self.arm.clear_data();
-                        self.arm.load_data(&self.appconfig);
+                        match self.arm.load_data(&self.appconfig) {
+                            Ok(..) => {},
+                            _ => {
+                                println!("Unable to load apoth manager data, not blocking");
+                                self.arm.clear_data();}
+                        };
                     };
                     if contents.button("Reset to default").clicked() {
                         self.appconfig = config::AppConfig::default();
@@ -448,7 +468,7 @@ pub fn set_save_items_qty_800(sm: &mut savedata::SaveDataManager, lm: &lootitems
         match arm {
             None => {},
             Some(arm) => {
-                if arm.is_not_full_cure_id(uid) {
+                if !arm.all_cures.is_empty() && arm.is_not_full_cure_id(uid) {
                     arm_max_qty = 0;
                 }
             }

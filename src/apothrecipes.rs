@@ -1,11 +1,21 @@
 use std::path::PathBuf;
+use std::error::Error;
 
 use std::str::FromStr;
 use strum::EnumString;
 
 use crate::config::AppConfig;
 
+#[derive(Debug, Clone)]
+struct ApothDataError;
 
+impl std::fmt::Display for ApothDataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "unable to load apoth data")
+    }
+}
+
+impl Error for ApothDataError {}
 
 #[derive(Debug, Clone, EnumString, PartialEq)]
 pub enum CureResultType {
@@ -80,11 +90,11 @@ impl ApothRecipeManager {
         self.xtree = xot::Xot::new();
     }
 
-    pub fn load_data(&mut self, appconfig: &AppConfig) {
+    pub fn load_data(&mut self, appconfig: &AppConfig) -> Result<(), Box<dyn Error>> {
 
         let filepath_apothrecipes = PathBuf::from_iter([&appconfig.path_kynseed_data, &appconfig.filename_kynseed_apothrecipes]);
 
-        let mut xml_vec = std::fs::read(&filepath_apothrecipes).unwrap();
+        let mut xml_vec = std::fs::read(&filepath_apothrecipes)?;
 
         // remove BOM
         if xml_vec[0..3] == [b'\xef', b'\xbb', b'\xbf'] {
@@ -108,17 +118,23 @@ impl ApothRecipeManager {
             };
         };
 
-        let xml_str = std::str::from_utf8(&xml_vec).unwrap();
+        let xml_str = std::str::from_utf8(&xml_vec)?;
 
         // should fix in xot crate
         // self.root = Some(self.xtree.parse(&xml_str.replacen("utf-8", "UTF-8", 1)).unwrap());
 
-        self.root = Some(self.xtree.parse(xml_str).unwrap());
-        self.doc_el = Some(self.xtree.document_element(self.root.unwrap()).unwrap());
+        self.root = Some(self.xtree.parse(xml_str)?);
+        self.doc_el = match self.xtree.document_element(self.root.unwrap()) {
+            Ok(x) => Some(x),
+            Err(e) => return Err(Box::new(e))
+        };
 
         // println!("{:?}", self.get_name_from_node(self.doc_el.unwrap()));
 
-        self.apothrecipes_node = Some(self.get_child_node_from_name(self.doc_el.unwrap(), "apothRecipes").unwrap());
+        self.apothrecipes_node = match self.get_child_node_from_name(self.doc_el.unwrap(), "apothRecipes") {
+            Some(x) => Some(x),
+            None => return Err(Box::new(ApothDataError))
+        };
 
         for child in self.xtree.children(self.apothrecipes_node.unwrap()) {
             match self.get_name_from_node( child) {
@@ -126,20 +142,28 @@ impl ApothRecipeManager {
                 Some(child_el_name) => if child_el_name != "ApothRecipeSetup" {continue}
             };
             
-            let child_result_type_node = self.get_child_node_from_name( child, "resultType").unwrap();
-            let child_ailment_id_node = self.get_child_node_from_name( child, "AilmentID").unwrap();
-            let child_item_id_node = self.get_child_node_from_name( child, "ItemID").unwrap();
-            let child_item_id_with_side_effects_node = self.get_child_node_from_name( child, "ItemIDWithSideEffects").unwrap();
+            let child_result_type_node = self.get_child_node_from_name( child, "resultType")
+                .ok_or_else(|| Box::new(ApothDataError))?;
+            let child_ailment_id_node = self.get_child_node_from_name( child, "AilmentID")
+                .ok_or_else(|| Box::new(ApothDataError))?;
+            let child_item_id_node = self.get_child_node_from_name( child, "ItemID")
+                .ok_or_else(|| Box::new(ApothDataError))?;
+            let child_item_id_with_side_effects_node = self.get_child_node_from_name( child, "ItemIDWithSideEffects")
+                .ok_or_else(|| Box::new(ApothDataError))?;
 
-            let result_type = CureResultType::from_str(self.xtree.text_content_str(child_result_type_node).unwrap()).unwrap();
-            let ailment_id = self.xtree.text_content_str(child_ailment_id_node).unwrap().parse::<i32>().unwrap();
-            let item_id = self.xtree.text_content_str(child_item_id_node).unwrap().parse::<i32>().unwrap();
-            let item_id_with_side_effects = self.xtree.text_content_str(child_item_id_with_side_effects_node).unwrap().parse::<i32>().unwrap();
+            let result_type = CureResultType::from_str(self.xtree.text_content_str(child_result_type_node)
+                .ok_or_else(|| Box::new(ApothDataError))?)?;
+            let ailment_id = self.xtree.text_content_str(child_ailment_id_node)
+                .ok_or_else(|| Box::new(ApothDataError))?.parse::<i32>()?;
+            let item_id = self.xtree.text_content_str(child_item_id_node)
+                .ok_or_else(|| Box::new(ApothDataError))?.parse::<i32>()?;
+            let item_id_with_side_effects = self.xtree.text_content_str(child_item_id_with_side_effects_node)
+                .ok_or_else(|| Box::new(ApothDataError))?.parse::<i32>()?;
             
             self.all_cures.push(ApothRecipe{result_type, ailment_id, item_id, item_id_with_side_effects});
 
         };
-        
+        Ok(())
     }
 
     pub fn get_name_from_node(&self, node: xot::Node) -> Option<&str> {

@@ -101,7 +101,7 @@ impl LootManager {
         for condition in self.has_star_rating_conditions.iter() {
             let condition_has_star_rating: bool = condition.has_star_rating == 1;
             if condition.condition_type == *"UniqueID" {
-                let c_uid: i32 = condition.compare_item.parse().unwrap();
+                let c_uid: i32 = condition.compare_item.parse().unwrap_or(i32::MAX);
                 if uid == c_uid {
                     return condition_has_star_rating;
                 }
@@ -135,27 +135,27 @@ impl LootManager {
 
     pub fn load_data(&mut self, appconfig: &AppConfig) -> Result<(), Box<dyn Error>> {
         
-        self.load_full_item_lookup(&appconfig.path_kynseed_data, &appconfig.filenames_kynseed_items).unwrap();
+        self.load_full_item_lookup(&appconfig.path_kynseed_data, &appconfig.filenames_kynseed_items)?;
 
         // let filepath_name_item_lookup = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_name_item_lookup]);
         let filepath_name_item_lookup: PathBuf = PathBuf::from("fake_path");
-        self.load_name_item_lookup(&filepath_name_item_lookup).unwrap();
+        self.load_name_item_lookup(&filepath_name_item_lookup)?;
 
         // let filepath_pickup_types = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_pickup_types]);
         let filepath_pickup_types: PathBuf = PathBuf::from("fake_path");
-        self.load_pickup_type_lookup(&filepath_pickup_types).unwrap();
+        self.load_pickup_type_lookup(&filepath_pickup_types)?;
 
         // let filepath_liquid_items = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_liquid_items]);
         let filepath_liquid_items: PathBuf = PathBuf::from("fake_path");
-        self.load_liquid_item_lookup(&filepath_liquid_items).unwrap();
+        self.load_liquid_item_lookup(&filepath_liquid_items)?;
 
         // let filepath_hide_quantity_item_lookup = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_hide_quantity_items]);
         let filepath_hide_quantity_item_lookup: PathBuf = PathBuf::from("fake_path");
-        self.load_hide_quantity_item_lookup(&filepath_hide_quantity_item_lookup).unwrap();
+        self.load_hide_quantity_item_lookup(&filepath_hide_quantity_item_lookup)?;
 
         // let filepath_has_star_rating_conditions = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_has_star_rating_conditions]);
         let filepath_has_star_rating_conditions: PathBuf = PathBuf::from("fake_path");
-        self.load_has_star_rating_conditions(&filepath_has_star_rating_conditions).unwrap();
+        self.load_has_star_rating_conditions(&filepath_has_star_rating_conditions)?;
 
         Ok(())
     }
@@ -173,7 +173,7 @@ impl LootManager {
         self.full_item_lookup.clear();
         for filename in filenames.iter() {
             let file_path = PathBuf::from_iter([folder_string, filename]);
-            self.load_kynseed_item_file(&file_path).unwrap();
+            self.load_kynseed_item_file(&file_path)?;
         };
         Ok(())
     }
@@ -182,8 +182,7 @@ impl LootManager {
         let mut rdr = csv::ReaderBuilder::new()
             .delimiter(b'|')
             .has_headers(false)
-            .from_path(file_path)
-            .unwrap();
+            .from_path(file_path)?;
         for result in rdr.deserialize() {
             let lootitem: LootItem = result?;
             self.full_item_lookup.insert(lootitem.uid, lootitem);
@@ -197,8 +196,7 @@ impl LootManager {
                 let mut rdr = csv::ReaderBuilder::new()
                     .delimiter(b'|')
                     .has_headers(false)
-                    .from_path(file_path)
-                    .unwrap();
+                    .from_path(file_path)?;
                 self.name_item_lookup.clear();
                 for result in rdr.deserialize() {
                     let record: (String, i32) = result?;
@@ -227,8 +225,7 @@ impl LootManager {
                 let mut rdr = csv::ReaderBuilder::new()
                     .delimiter(b'|')
                     .has_headers(false)
-                    .from_path(file_path)
-                    .unwrap();
+                    .from_path(file_path)?;
                 self.pickup_type_lookup.clear();
                 self.pickup_type_lookup_rev.clear();
                 for result in rdr.deserialize() {
@@ -261,8 +258,7 @@ impl LootManager {
                 let mut rdr = csv::ReaderBuilder::new()
                     .delimiter(b'|')
                     .has_headers(false)
-                    .from_path(file_path)
-                    .unwrap();
+                    .from_path(file_path)?;
                 self.liquid_item_lookup.clear();
                 for result in rdr.deserialize() {
                     let record: String = result?;
@@ -291,8 +287,7 @@ impl LootManager {
                 let mut rdr = csv::ReaderBuilder::new()
                     .delimiter(b'|')
                     .has_headers(false)
-                    .from_path(file_path)
-                    .unwrap();
+                    .from_path(file_path)?;
                 self.hide_quantity_item_lookup.clear();
                 for result in rdr.deserialize() {
                     let record: String = result?;
@@ -321,8 +316,7 @@ impl LootManager {
                 let mut rdr = csv::ReaderBuilder::new()
                     .delimiter(b'|')
                     .has_headers(false)
-                    .from_path(file_path)
-                    .unwrap();
+                    .from_path(file_path)?;
                 self.has_star_rating_conditions.clear();
                 for result in rdr.deserialize() {
                     let record: HasStarRatingCondition = result?;

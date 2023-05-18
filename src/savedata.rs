@@ -1,9 +1,19 @@
 use std::path::PathBuf;
+use std::error::Error;
 
 use crate::config::AppConfig;
 use crate::lootitems::{LootManager, LootItem};
 
+#[derive(Debug, Clone)]
+struct SaveDataError;
 
+impl std::fmt::Display for SaveDataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "unable to load save data")
+    }
+}
+
+impl Error for SaveDataError {}
 
 #[derive(Debug, Clone)]
 pub struct SaveInventoryItemRef {
@@ -115,11 +125,11 @@ impl SaveDataManager {
         self.xtree = xot::Xot::new();
     }
 
-    pub fn load_data(&mut self, appconfig: &AppConfig) {
+    pub fn load_data(&mut self, appconfig: &AppConfig) -> Result<(), Box<dyn Error>> {
 
         let filepath_savegame = PathBuf::from_iter([&appconfig.path_kynseed_saves, &appconfig.filename_kynseed_save]);
 
-        let mut xml_vec = std::fs::read(&filepath_savegame).unwrap();
+        let mut xml_vec = std::fs::read(&filepath_savegame)?;
 
         // remove BOM
         if xml_vec[0..3] == [b'\xef', b'\xbb', b'\xbf'] {
@@ -143,36 +153,59 @@ impl SaveDataManager {
             };
         };
 
-        let xml_str = std::str::from_utf8(&xml_vec).unwrap();
+        let xml_str = std::str::from_utf8(&xml_vec)?;
 
         // should fix in xot crate
         // self.root = Some(self.xtree.parse(&xml_str.replacen("utf-8", "UTF-8", 1)).unwrap());
 
-        self.root = Some(self.xtree.parse(xml_str).unwrap());
-        self.doc_el = Some(self.xtree.document_element(self.root.unwrap()).unwrap());
+        self.root = Some(self.xtree.parse(xml_str)?);
+        self.doc_el = match self.xtree.document_element(self.root.unwrap()) {
+            Ok(x) => Some(x),
+            Err(e) => return Err(Box::new(e))
+        };
 
         // println!("{:?}", self.get_name_from_node(self.doc_el.unwrap()));
 
-        self.playerdata_node = Some(self.get_child_node_from_name(self.doc_el.unwrap(), "PlayerData").unwrap());
+        self.playerdata_node = match self.get_child_node_from_name(self.doc_el.unwrap(), "PlayerData") {
+            Some(x) => Some(x),
+            None => return Err(Box::new(SaveDataError))
+        };
 
-        self.brass_count_node = Some(self.get_child_node_from_name(self.playerdata_node.unwrap(), "BrassCount").unwrap());
-        self.tool_levelling_node = Some(self.get_child_node_from_name(self.playerdata_node.unwrap(), "ToolLevelling").unwrap());
+        self.brass_count_node = match self.get_child_node_from_name(self.playerdata_node.unwrap(), "BrassCount") {
+            Some(x) => Some(x),
+            None => return Err(Box::new(SaveDataError))
+        };
+        self.tool_levelling_node = match self.get_child_node_from_name(self.playerdata_node.unwrap(), "ToolLevelling") {
+            Some(x) => Some(x),
+            None => return Err(Box::new(SaveDataError))
+        };
 
-        self.inventory_node = Some(self.get_child_node_from_name( self.playerdata_node.unwrap(), "Inventory").unwrap());
-        self.allitems_node = Some(self.get_child_node_from_name(self.inventory_node.unwrap(), "AllItems").unwrap());
+        self.inventory_node = match self.get_child_node_from_name( self.playerdata_node.unwrap(), "Inventory") {
+            Some(x) => Some(x),
+            None => return Err(Box::new(SaveDataError))
+        };
+        self.allitems_node = match self.get_child_node_from_name(self.inventory_node.unwrap(), "AllItems") {
+            Some(x) => Some(x),
+            None => return Err(Box::new(SaveDataError))
+        };
 
         for child in self.xtree.children(self.allitems_node.unwrap()) {
-            match self.get_name_from_node( child) {
+            match self.get_name_from_node(child) {
                 None => continue,
                 Some(child_el_name) => if child_el_name != "item" {continue}
             };
             
-            let child_key_node = self.get_child_node_from_name( child, "key").unwrap();
-            let child_key_int_node = self.get_child_node_from_name( child_key_node, "int").unwrap();
+            let child_key_node = self.get_child_node_from_name( child, "key")
+                .ok_or_else(|| Box::new(SaveDataError))?;
+            let child_key_int_node = self.get_child_node_from_name( child_key_node, "int")
+                .ok_or_else(|| Box::new(SaveDataError))?;
 
-            let child_value_node = self.get_child_node_from_name( child, "value").unwrap();
-            let child_value_inventoryitem_node = self.get_child_node_from_name( child_value_node, "InventoryItem").unwrap();
-            let child_value_inventoryitem_count_node = self.get_child_node_from_name( child_value_inventoryitem_node, "Count").unwrap();
+            let child_value_node = self.get_child_node_from_name( child, "value")
+                .ok_or_else(|| Box::new(SaveDataError))?;
+            let child_value_inventoryitem_node = self.get_child_node_from_name( child_value_node, "InventoryItem")
+                .ok_or_else(|| Box::new(SaveDataError))?;
+            let child_value_inventoryitem_count_node = self.get_child_node_from_name( child_value_inventoryitem_node, "Count")
+                .ok_or_else(|| Box::new(SaveDataError))?;
             
             let mut child_count_int_nodes: Vec<xot::Node> = Vec::new();
             
@@ -193,15 +226,17 @@ impl SaveDataManager {
 
         };
 
-        self.load_newlarder_data();
-        self.load_savedshops_data();
+        self.load_newlarder_data()?;
+        self.load_savedshops_data()?;
+
+        Ok(())
         
     }
 
-    pub fn load_newlarder_data(&mut self) {
+    pub fn load_newlarder_data(&mut self) -> Result<(), Box<dyn Error>> {
         self.newlarder_node = self.get_child_node_from_name(self.playerdata_node.unwrap(), "newLarder");
         match self.newlarder_node {
-            None => return,
+            None => return Ok(()),
             Some(_node) => {}
         };
 
@@ -210,35 +245,29 @@ impl SaveDataManager {
                 None => continue,
                 Some(d_name) => {
                     if d_name == "ItemStack" {
-                        let d_key_node = self.get_child_node_from_name(descendant, "UniqueID").unwrap();
-                        let d_count_node = self.get_child_node_from_name(descendant, "Count");
+                        let d_key_node = self.get_child_node_from_name(descendant, "UniqueID")
+                            .ok_or_else(|| Box::new(SaveDataError))?;
                         let mut d_count_int_nodes:Vec<xot::Node> = Vec::new();
-
-                        for maybe_int_node in self.xtree.children(d_count_node.unwrap()) {
-                            match self.get_name_from_node( maybe_int_node) {
-                                None => continue,
-                                Some(el_name) => {
-                                    if el_name == "int" {
-                                        d_count_int_nodes.push(maybe_int_node);
-                                        
-                                    }
+                        if let Some(d_count_node) = self.get_child_node_from_name(descendant, "Count") {
+                            for maybe_int_node in self.xtree.children(d_count_node) {
+                                match self.get_name_from_node( maybe_int_node) {
+                                    None => continue,
+                                    Some(el_name) => {if el_name == "int" {d_count_int_nodes.push(maybe_int_node);}}
                                 }
-                            }
+                            };
                         };
-
                         self.newlarder_item_ref.push(SaveInventoryItemRef{key_int_node: d_key_node, count_int_nodes: d_count_int_nodes });
                     }
                 }
-
             }
         }
-
+        Ok(())
     }
 
-    pub fn load_savedshops_data(&mut self) {
+    pub fn load_savedshops_data(&mut self) -> Result<(), Box<dyn Error>>{
         self.savedshops_node = self.get_child_node_from_name(self.doc_el.unwrap(), "SavedShops");
         match self.savedshops_node {
-            None => return,
+            None => return Ok(()),
             Some(_node) => {}
         };
 
@@ -247,28 +276,23 @@ impl SaveDataManager {
                 None => continue,
                 Some(d_name) => {
                     if d_name == "ItemStack" {
-                        let d_key_node = self.get_child_node_from_name(descendant, "UniqueID").unwrap();
-                        let d_count_node = self.get_child_node_from_name(descendant, "Count");
+                        let d_key_node = self.get_child_node_from_name(descendant, "UniqueID")
+                            .ok_or_else(|| Box::new(SaveDataError))?;
                         let mut d_count_int_nodes:Vec<xot::Node> = Vec::new();
-
-                        for maybe_int_node in self.xtree.children(d_count_node.unwrap()) {
-                            match self.get_name_from_node( maybe_int_node) {
-                                None => continue,
-                                Some(el_name) => {
-                                    if el_name == "int" {
-                                        d_count_int_nodes.push(maybe_int_node);
-                                        
-                                    }
+                        if let Some(d_count_node) = self.get_child_node_from_name(descendant, "Count") {
+                            for maybe_int_node in self.xtree.children(d_count_node) {
+                                match self.get_name_from_node( maybe_int_node) {
+                                    None => continue,
+                                    Some(el_name) => {if el_name == "int" {d_count_int_nodes.push(maybe_int_node);}}
                                 }
-                            }
+                            };
                         };
-
                         self.savedshops_item_ref.push(SaveInventoryItemRef{key_int_node: d_key_node, count_int_nodes: d_count_int_nodes });
                     }
                 }
-
             }
-        }
+        };
+        Ok(())
 
     }
 
