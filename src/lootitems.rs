@@ -167,7 +167,7 @@ impl LootManager {
                     filepath_liquid_items.clone(), 
                     filepath_hide_quantity_item_lookup.clone(), 
                     filepath_has_star_rating_conditions.clone()
-                    ].iter().map(|x|x.is_file()).fold(true, |acc, el| {acc && el});
+                    ].iter().map(|x|x.is_file()).all(|el| el);
                 if !all_files_exist {return Err(Box::new(LootDataError))};
             },
             true => {}
