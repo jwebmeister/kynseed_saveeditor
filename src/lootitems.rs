@@ -173,24 +173,10 @@ impl LootManager {
             true => {}
         }
 
-        // let filepath_name_item_lookup = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_name_item_lookup]);
-        // let filepath_name_item_lookup: PathBuf = PathBuf::from("fake_path");
         self.load_name_item_lookup(&filepath_name_item_lookup)?;
-
-        // let filepath_pickup_types = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_pickup_types]);
-        // let filepath_pickup_types: PathBuf = PathBuf::from("fake_path");
         self.load_pickup_type_lookup(&filepath_pickup_types)?;
-
-        // let filepath_liquid_items = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_liquid_items]);
-        // let filepath_liquid_items: PathBuf = PathBuf::from("fake_path");
         self.load_liquid_item_lookup(&filepath_liquid_items)?;
-
-        // let filepath_hide_quantity_item_lookup = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_hide_quantity_items]);
-        // let filepath_hide_quantity_item_lookup: PathBuf = PathBuf::from("fake_path");
         self.load_hide_quantity_item_lookup(&filepath_hide_quantity_item_lookup)?;
-
-        // let filepath_has_star_rating_conditions = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_has_star_rating_conditions]);
-        // let filepath_has_star_rating_conditions: PathBuf = PathBuf::from("fake_path");
         self.load_has_star_rating_conditions(&filepath_has_star_rating_conditions)?;
 
         Ok(())

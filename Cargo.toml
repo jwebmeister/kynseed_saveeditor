@@ -1,5 +1,5 @@
 [package]
-name = "kynseed_saveedit_egui"
+name = "kynseed_saveeditor"
 version = "0.1.0"
 edition = "2021"
 

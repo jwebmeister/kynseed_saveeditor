@@ -39,9 +39,6 @@ pub struct App {
 
 impl App {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        // This is also where you can customize the look and feel of egui using
-        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-
         let mut show_ui_state = ShowUIState::default();
 
         let config_filepath = config::get_config_filepath();
@@ -313,17 +310,23 @@ impl App {
                         );
                         ui.close_menu();
                     };
+                    if ui.button("Sort by cost, name").clicked() {
+                        self.save_inventory_items.sort_by(|a,b| 
+                            {let first = b.cost.cmp(&a.cost);
+                            let second = a.name.cmp(&b.name);
+                            first.then(second)}
+                        );
+                        ui.close_menu();
+                    };
                     if ui.button("Sort by UID").clicked() {
                         self.save_inventory_items.sort_by(|a,b| 
                             {a.uid.cmp(&b.uid)}
                         );
                         ui.close_menu();
                     };
-                    if ui.button("Sort by cost, name").clicked() {
+                    if ui.button("Sort by name").clicked() {
                         self.save_inventory_items.sort_by(|a,b| 
-                            {let first = b.cost.cmp(&a.cost);
-                            let second = a.name.cmp(&b.name);
-                            first.then(second)}
+                            {a.name.cmp(&b.name)}
                         );
                         ui.close_menu();
                     };
@@ -334,13 +337,11 @@ impl App {
 
     pub fn central_panel(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
             use egui_extras::{Column, TableBuilder};
 
             let table = TableBuilder::new(ui)
                 .striped(true)
                 .resizable(false)
-                // .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                 .cell_layout(egui::Layout::centered_and_justified(egui::Direction::TopDown))
                 .column(Column::exact(40.0))
                 .column(Column::exact(65.0))
@@ -449,7 +450,6 @@ impl eframe::App for App {
 #[derive(Debug)]
 pub struct SaveInventoryItemCount {
     pub count: i32,
-    // count_string: String
 }
 
 impl SaveInventoryItemCount {
@@ -457,7 +457,6 @@ impl SaveInventoryItemCount {
     pub fn new(count: i32) -> Self {
         Self {
             count,
-            // count_string: count.to_string()
         }
     }
 
