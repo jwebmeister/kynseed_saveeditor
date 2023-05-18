@@ -52,7 +52,8 @@ impl App {
         match lm.load_data(&appconfig) {
             Ok(..) => {},
             _ => {
-                show_ui_state.error_msg.push_str("Unable to load loot manager data."); 
+                lm.clear_data();
+                show_ui_state.error_msg.push_str("Unable to load loot data."); 
                 show_ui_state.error_during_load = true;
             } 
         };
@@ -62,6 +63,7 @@ impl App {
         match sm.load_data(&appconfig) {
             Ok(..) => {},
             _ => {
+                sm.clear_data();
                 show_ui_state.error_msg.push_str("Unable to load save data."); 
                 show_ui_state.error_during_load = true;
             } 
@@ -91,10 +93,17 @@ impl App {
         match arm.load_data(&appconfig) {
             Ok(..) => {},
             _ => {
-                show_ui_state.error_msg.push_str("Unable to load apoth manager data, not blocking.");
                 arm.clear_data();
+                show_ui_state.error_msg.push_str("Unable to load apoth recipe data, not blocking.");
             } 
         }
+
+        if show_ui_state.error_during_load { 
+            save_inventory_items.clear();
+            sm.clear_data();
+            lm.clear_data();
+            arm.clear_data();
+        };
 
         Self {
             appconfig,
@@ -125,44 +134,63 @@ impl App {
                         self.show_ui_state.error_during_load = false;
                         self.show_ui_state.error_msg = "".to_string();
 
+                        self.save_inventory_items.clear();
+                        self.sm.clear_data();
                         self.lm.clear_data();
+                        self.arm.clear_data();
+
                         match self.lm.load_data(&self.appconfig) {
                             Ok(..) => {},
                             _ => {
-                                self.show_ui_state.error_msg.push_str("Unable to load loot manager data."); 
+                                self.lm.clear_data();
+                                self.show_ui_state.error_msg.push_str("Unable to load loot data."); 
                                 self.show_ui_state.error_during_load = true;
                             } 
                         };
 
-                        self.sm.clear_data();
+                        
                         match self.sm.load_data(&self.appconfig) {
                             Ok(..) => {},
                             _ => {
+                                self.sm.clear_data();
                                 self.show_ui_state.error_msg.push_str("Unable to load save data."); 
                                 self.show_ui_state.error_during_load = true;
                             } 
                         };
 
-                        self.save_inventory_items = Vec::new();
+                        match self.show_ui_state.error_during_load {
+                            true => {
+                                self.save_inventory_items.clear();
+                            },
+                            false => {
+                                for siir in self.sm.save_inventory_ref.iter() {
+                                    let sii = AppSaveInventoryItem::new(siir, &self.sm, &self.lm);
+                                    self.save_inventory_items.push(sii);
+                                };
+                        
+                                self.save_inventory_items.sort_by(|a,b| 
+                                    {let first = a.pickup_type_name.cmp(&b.pickup_type_name);
+                                    let second = a.name.cmp(&b.name);
+                                    first.then(second)}
+                                );
+                            }
+                        }
 
-                        for siir in self.sm.save_inventory_ref.iter() {
-                            let sii = AppSaveInventoryItem::new(siir, &self.sm, &self.lm);
-                            self.save_inventory_items.push(sii);
-                        };
-
-                        self.save_inventory_items.sort_by(|a,b| 
-                            {let first = a.pickup_type_name.cmp(&b.pickup_type_name);
-                            let second = a.name.cmp(&b.name);
-                            first.then(second)}
-                        );
-
-                        self.arm.clear_data();
                         match self.arm.load_data(&self.appconfig) {
                             Ok(..) => {},
                             _ => {
-                                self.show_ui_state.error_msg.push_str("Unable to load apoth manager data, not blocking.");
-                                self.arm.clear_data();}
+                                self.arm.clear_data();
+                                self.show_ui_state.error_msg.push_str("Unable to load apoth recipe data, not blocking.");
+                            }
                         };
+
+                        if self.show_ui_state.error_during_load { 
+                            self.save_inventory_items.clear();
+                            self.sm.clear_data();
+                            self.lm.clear_data();
+                            self.arm.clear_data();
+                        };
+
                     };
                     if contents.button("Reset to default").clicked() {
                         self.appconfig = config::AppConfig::default();
