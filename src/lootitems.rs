@@ -13,6 +13,17 @@ const ITEM_LOOKUP_TXT: &str = include_str!("../saveedit_data/ItemLookup.txt");
 const LIQUID_ITEMS_TXT: &str = include_str!("../saveedit_data/LiquidItems.txt");
 const PICKUP_TYPE_TXT: &str = include_str!("../saveedit_data/PickupType.txt");
 
+#[derive(Debug, Clone)]
+struct LootDataError;
+
+impl std::fmt::Display for LootDataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "unable to load loot data")
+    }
+}
+
+impl Error for LootDataError {}
+
 
 /// # LootItem 
 /// An item as defined by EAItems.txt or AllItems.txt
@@ -137,24 +148,49 @@ impl LootManager {
         
         self.load_full_item_lookup(&appconfig.path_kynseed_data, &appconfig.filenames_kynseed_items)?;
 
+        let mut filepath_name_item_lookup: PathBuf = PathBuf::from("fake_path");
+        let mut filepath_pickup_types: PathBuf = PathBuf::from("fake_path");
+        let mut filepath_liquid_items: PathBuf = PathBuf::from("fake_path");
+        let mut filepath_hide_quantity_item_lookup: PathBuf = PathBuf::from("fake_path");
+        let mut filepath_has_star_rating_conditions: PathBuf = PathBuf::from("fake_path");
+
+        match appconfig.b_use_embedded_saveedit_data {
+            false => {
+                filepath_name_item_lookup = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_name_item_lookup]);
+                filepath_pickup_types = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_pickup_types]);
+                filepath_liquid_items = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_liquid_items]);
+                filepath_hide_quantity_item_lookup = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_hide_quantity_items]);
+                filepath_has_star_rating_conditions = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_has_star_rating_conditions]);
+                let all_files_exist = [
+                    filepath_name_item_lookup.clone(), 
+                    filepath_pickup_types.clone(), 
+                    filepath_liquid_items.clone(), 
+                    filepath_hide_quantity_item_lookup.clone(), 
+                    filepath_has_star_rating_conditions.clone()
+                    ].iter().map(|x|x.is_file()).fold(true, |acc, el| {acc && el});
+                if !all_files_exist {return Err(Box::new(LootDataError))};
+            },
+            true => {}
+        }
+
         // let filepath_name_item_lookup = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_name_item_lookup]);
-        let filepath_name_item_lookup: PathBuf = PathBuf::from("fake_path");
+        // let filepath_name_item_lookup: PathBuf = PathBuf::from("fake_path");
         self.load_name_item_lookup(&filepath_name_item_lookup)?;
 
         // let filepath_pickup_types = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_pickup_types]);
-        let filepath_pickup_types: PathBuf = PathBuf::from("fake_path");
+        // let filepath_pickup_types: PathBuf = PathBuf::from("fake_path");
         self.load_pickup_type_lookup(&filepath_pickup_types)?;
 
         // let filepath_liquid_items = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_liquid_items]);
-        let filepath_liquid_items: PathBuf = PathBuf::from("fake_path");
+        // let filepath_liquid_items: PathBuf = PathBuf::from("fake_path");
         self.load_liquid_item_lookup(&filepath_liquid_items)?;
 
         // let filepath_hide_quantity_item_lookup = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_hide_quantity_items]);
-        let filepath_hide_quantity_item_lookup: PathBuf = PathBuf::from("fake_path");
+        // let filepath_hide_quantity_item_lookup: PathBuf = PathBuf::from("fake_path");
         self.load_hide_quantity_item_lookup(&filepath_hide_quantity_item_lookup)?;
 
         // let filepath_has_star_rating_conditions = PathBuf::from_iter([&appconfig.path_saveedit_data, &appconfig.filename_saveedit_has_star_rating_conditions]);
-        let filepath_has_star_rating_conditions: PathBuf = PathBuf::from("fake_path");
+        // let filepath_has_star_rating_conditions: PathBuf = PathBuf::from("fake_path");
         self.load_has_star_rating_conditions(&filepath_has_star_rating_conditions)?;
 
         Ok(())

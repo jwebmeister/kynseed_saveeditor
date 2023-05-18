@@ -45,7 +45,13 @@ impl App {
         let mut show_ui_state = ShowUIState::default();
 
         let config_filepath = config::get_config_filepath();
-        let appconfig: config::AppConfig = confy::load_path(config_filepath.as_path()).unwrap();
+        let appconfig: config::AppConfig = match confy::load_path(config_filepath.as_path()) {
+            Ok(cfg) => cfg,
+            Err(_e) => {
+                confy::store_path(config_filepath.as_path(), config::AppConfig::default()).unwrap();
+                config::AppConfig::default()
+            }
+        };
 
         let mut lm = lootitems::LootManager::default();
         lm.clear_data();
@@ -196,21 +202,23 @@ impl App {
                         self.appconfig = config::AppConfig::default();
                     };
                 });
-                ui.vertical(|contents| {
-                    contents.add(egui::Label::new("path_kynseed_data"));
-                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.path_kynseed_data).desired_width(f32::INFINITY));
-                });
+
+                ui.separator();
+
                 ui.vertical(|contents| {
                     contents.add(egui::Label::new("path_kynseed_saves"));
                     contents.add(egui::TextEdit::singleline(&mut self.appconfig.path_kynseed_saves).desired_width(f32::INFINITY));
                 });
                 ui.vertical(|contents| {
-                    contents.add(egui::Label::new("path_saveedit_data"));
-                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.path_saveedit_data).desired_width(f32::INFINITY));
-                });
-                ui.vertical(|contents| {
                     contents.add(egui::Label::new("filename_kynseed_save"));
                     contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_kynseed_save).desired_width(f32::INFINITY));
+                });
+
+                ui.separator();
+
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("path_kynseed_data"));
+                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.path_kynseed_data).desired_width(f32::INFINITY));
                 });
                 ui.vertical(|contents| {
                     contents.add(egui::Label::new("filenames_kynseed_items"));
@@ -219,35 +227,44 @@ impl App {
                             vcontents.add(egui::TextEdit::singleline(x).desired_width(f32::INFINITY));
                         });
                         vcontents.horizontal(|hcontents| {
-                            if hcontents.button("+").clicked() {self.appconfig.filenames_kynseed_items.push("".to_string())};
-                            if hcontents.button("-").clicked() {self.appconfig.filenames_kynseed_items.pop();};
+                            if hcontents.add_sized([20.0, 20.0], egui::Button::new("+")).clicked() 
+                                {self.appconfig.filenames_kynseed_items.push("".to_string())};
+                            if hcontents.add_sized([20.0, 20.0], egui::Button::new("-")).clicked() 
+                                {self.appconfig.filenames_kynseed_items.pop();};
                         });
-                        
                     });
                 });
                 ui.vertical(|contents| {
                     contents.add(egui::Label::new("filename_kynseed_apothrecipes"));
                     contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_kynseed_apothrecipes).desired_width(f32::INFINITY));
                 });
+
+                ui.separator();
+                
+                ui.checkbox(&mut self.appconfig.b_use_embedded_saveedit_data, "Use embedded saveedit data");
+                ui.vertical(|contents| {
+                    contents.add(egui::Label::new("path_saveedit_data"));
+                    contents.add_enabled(!self.appconfig.b_use_embedded_saveedit_data, egui::TextEdit::singleline(&mut self.appconfig.path_saveedit_data).desired_width(f32::INFINITY));
+                });
                 ui.vertical(|contents| {
                     contents.add(egui::Label::new("filename_saveedit_has_star_rating_conditions"));
-                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_has_star_rating_conditions).desired_width(f32::INFINITY));
+                    contents.add_enabled(!self.appconfig.b_use_embedded_saveedit_data, egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_has_star_rating_conditions).desired_width(f32::INFINITY));
                 });
                 ui.vertical(|contents| {
                     contents.add(egui::Label::new("filename_saveedit_hide_quantity_items"));
-                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_hide_quantity_items).desired_width(f32::INFINITY));
+                    contents.add_enabled(!self.appconfig.b_use_embedded_saveedit_data, egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_hide_quantity_items).desired_width(f32::INFINITY));
                 });
                 ui.vertical(|contents| {
                     contents.add(egui::Label::new("filename_saveedit_name_item_lookup"));
-                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_name_item_lookup).desired_width(f32::INFINITY));
+                    contents.add_enabled(!self.appconfig.b_use_embedded_saveedit_data, egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_name_item_lookup).desired_width(f32::INFINITY));
                 });
                 ui.vertical(|contents| {
                     contents.add(egui::Label::new("filename_saveedit_liquid_items"));
-                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_liquid_items).desired_width(f32::INFINITY));
+                    contents.add_enabled(!self.appconfig.b_use_embedded_saveedit_data, egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_liquid_items).desired_width(f32::INFINITY));
                 });
                 ui.vertical(|contents| {
                     contents.add(egui::Label::new("filename_saveedit_pickup_types"));
-                    contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_pickup_types).desired_width(f32::INFINITY));
+                    contents.add_enabled(!self.appconfig.b_use_embedded_saveedit_data, egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_pickup_types).desired_width(f32::INFINITY));
                 });
             });
     }

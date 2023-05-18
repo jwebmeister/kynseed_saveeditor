@@ -20,7 +20,8 @@ pub struct AppConfig {
     pub filename_saveedit_hide_quantity_items: String,
     pub filename_saveedit_name_item_lookup: String,
     pub filename_saveedit_liquid_items: String,
-    pub filename_saveedit_pickup_types: String
+    pub filename_saveedit_pickup_types: String,
+    pub b_use_embedded_saveedit_data: bool,
 }
 
 impl Default for AppConfig {
@@ -36,7 +37,8 @@ impl Default for AppConfig {
             filename_saveedit_hide_quantity_items: String::from("HideQuantity.txt"),
             filename_saveedit_name_item_lookup: String::from("ItemLookup.txt"),
             filename_saveedit_liquid_items: String::from("LiquidItems.txt"),
-            filename_saveedit_pickup_types: String::from("PickupType.txt")
+            filename_saveedit_pickup_types: String::from("PickupType.txt"),
+            b_use_embedded_saveedit_data: true,
         }
     }
 }
