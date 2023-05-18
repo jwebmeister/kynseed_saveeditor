@@ -13,6 +13,7 @@ pub struct ShowUIState {
     top_panel: bool,
     central_panel: bool,
     error_during_load: bool,
+    error_msg: String,
 }
 
 impl Default for ShowUIState {
@@ -22,6 +23,7 @@ impl Default for ShowUIState {
             top_panel: true,
             central_panel: true,
             error_during_load: false,
+            error_msg: "".to_string(),
         }
     }
 }
@@ -50,7 +52,7 @@ impl App {
         match lm.load_data(&appconfig) {
             Ok(..) => {},
             _ => {
-                println!("Unable to load loot manager data"); 
+                show_ui_state.error_msg.push_str("Unable to load loot manager data."); 
                 show_ui_state.error_during_load = true;
             } 
         };
@@ -60,7 +62,7 @@ impl App {
         match sm.load_data(&appconfig) {
             Ok(..) => {},
             _ => {
-                println!("Unable to load save data"); 
+                show_ui_state.error_msg.push_str("Unable to load save data."); 
                 show_ui_state.error_during_load = true;
             } 
         };
@@ -89,7 +91,7 @@ impl App {
         match arm.load_data(&appconfig) {
             Ok(..) => {},
             _ => {
-                println!("Unable to load apoth manager data, not blocking");
+                show_ui_state.error_msg.push_str("Unable to load apoth manager data, not blocking.");
                 arm.clear_data();
             } 
         }
@@ -120,11 +122,14 @@ impl App {
                         let config_filepath = config::get_config_filepath();
                         self.appconfig = confy::load_path(config_filepath.as_path()).unwrap();
 
+                        self.show_ui_state.error_during_load = false;
+                        self.show_ui_state.error_msg = "".to_string();
+
                         self.lm.clear_data();
                         match self.lm.load_data(&self.appconfig) {
                             Ok(..) => {},
                             _ => {
-                                println!("Unable to load loot manager data"); 
+                                self.show_ui_state.error_msg.push_str("Unable to load loot manager data."); 
                                 self.show_ui_state.error_during_load = true;
                             } 
                         };
@@ -133,7 +138,7 @@ impl App {
                         match self.sm.load_data(&self.appconfig) {
                             Ok(..) => {},
                             _ => {
-                                println!("Unable to load save data"); 
+                                self.show_ui_state.error_msg.push_str("Unable to load save data."); 
                                 self.show_ui_state.error_during_load = true;
                             } 
                         };
@@ -155,7 +160,7 @@ impl App {
                         match self.arm.load_data(&self.appconfig) {
                             Ok(..) => {},
                             _ => {
-                                println!("Unable to load apoth manager data, not blocking");
+                                self.show_ui_state.error_msg.push_str("Unable to load apoth manager data, not blocking.");
                                 self.arm.clear_data();}
                         };
                     };
@@ -217,6 +222,12 @@ impl App {
                     contents.add(egui::TextEdit::singleline(&mut self.appconfig.filename_saveedit_pickup_types).desired_width(f32::INFINITY));
                 });
             });
+    }
+
+    pub fn bottom_panel(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
+            ui.colored_label(egui::Color32::RED, &mut self.show_ui_state.error_msg);
+        });
     }
 
     pub fn top_panel(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -381,6 +392,7 @@ impl eframe::App for App {
         } = self;
         
         if self.show_ui_state.top_panel {self.top_panel(ctx, frame)};
+        if self.show_ui_state.top_panel {self.bottom_panel(ctx, frame)};
         if self.show_ui_state.central_panel {self.central_panel(ctx, frame)};
         if self.show_ui_state.options_window {self.options_window(ctx, frame)};
 
