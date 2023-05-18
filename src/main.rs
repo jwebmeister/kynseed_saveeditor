@@ -4,8 +4,6 @@ mod savedata;
 mod app;
 mod apothrecipes;
 
-//mod cli_app;
-
 
 
 // When compiling natively:
