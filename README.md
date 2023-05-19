@@ -2,7 +2,20 @@
 
 Savegame editor for the video game "Kynseed" by PixelCount Studios.
 
-![Alt text](/../docs/docs/pics/kynseed_saveeditor_001.jpg?raw=true "kynseed_saveeditor")
+![Alt text](./docs/kynseed_saveeditor_001.jpg?raw=true "kynseed_saveeditor")
+
+## Install instructions
+- Download latest release from https://github.com/jwebmeister/kynseed_saveeditor/releases/latest
+- Copy the saveeditor files and folders to within your Kynseed game folder:
+    - unzip from "kynseed_saveeditor*.zip" (into game folder):
+        - "kynseed_saveeditor.exe"
+        - "saveedit_data" folder and containing files
+    - e.g. "\steamapps\common\Kynseed\kynseed_saveeditor.exe"
+- Run "kynseed_saveeditor.exe" from within the Kynseed game folder.  
+    - It will prompt in the bottom status bar if there are any errors.  
+    - You can make changes to the editors settings within the File->Options menu, or change the .toml file generated after first run of the editor.
+- NOTE: The savegame editor needs access to folders and files from within your Kynseed game folder (specifically read to ".\Data", read-write to ".\Saves", folders and files) in order to function correctly.
+
 
 ## Version history & features
 ### v0.1
