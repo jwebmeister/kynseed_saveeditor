@@ -482,6 +482,9 @@ impl App {
                                     &mut self.sm, 
                                     self.save_inventory_items[row_index].uid);
                                 self.save_inventory_items[row_index].uid = new_uid;
+                                self.save_inventory_items[row_index].name = self.lm.full_item_lookup[&new_uid].name.clone();
+                                self.save_inventory_items[row_index].pickup_type_name = self.lm.pickup_type_lookup_rev[&self.lm.full_item_lookup[&new_uid].type_of_pickup].clone();
+                                self.save_inventory_items[row_index].cost = self.lm.full_item_lookup[&new_uid].cost;
                             };
 
                             // let combo_response = egui::ComboBox::from_id_source(row_index)
