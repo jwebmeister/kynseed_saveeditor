@@ -9,6 +9,9 @@ use crate::savedata;
 use crate::apothrecipes;
 
 pub struct ShowUIState {
+    loot_ref_window: bool,
+    loot_ref_name_filter: String,
+    loot_ref_type_filter: String,
     options_window: bool,
     top_panel: bool,
     central_panel: bool,
@@ -19,6 +22,9 @@ pub struct ShowUIState {
 impl Default for ShowUIState {
     fn default() -> Self {
         Self {
+            loot_ref_window: false,
+            loot_ref_name_filter: "".to_string(),
+            loot_ref_type_filter: "".to_string(),
             options_window: false,
             top_panel: true,
             central_panel: true,
@@ -118,6 +124,69 @@ impl App {
         }
     }
 
+    pub fn loot_ref_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        use egui_extras::{Column, TableBuilder};
+        egui::Window::new("Loot reference")
+            .open(&mut self.show_ui_state.loot_ref_window)
+            .default_width(300.0)
+            .vscroll(true)
+            .show(ctx, |ui| {
+                let table = TableBuilder::new(ui)
+                    .striped(true)
+                    .resizable(false)
+                    .cell_layout(egui::Layout::centered_and_justified(egui::Direction::TopDown))
+                    .column(Column::initial(40.0).at_least(40.0))
+                    .column(Column::initial(160.0).range(40.0..=200.0).resizable(true))
+                    .column(Column::initial(160.0).range(40.0..=200.0).resizable(true))
+                    .column(Column::initial(40.0).at_least(40.0))
+                    .min_scrolled_height(0.0);
+
+                table
+                    .header(20.0, |mut header| {
+                        header.col(|ui| {
+                            ui.strong("uid");
+                        });
+                        header.col(|ui| {
+                            ui.text_edit_singleline(&mut self.show_ui_state.loot_ref_name_filter);
+                        });
+                        header.col(|ui| {
+                            ui.text_edit_singleline(&mut self.show_ui_state.loot_ref_type_filter);
+                        });
+                        header.col(|ui| {
+                            ui.strong("Cost");
+                        });
+                    })
+                    .body(|body| {
+                        let mut filtered_lm: Vec<_> = self.lm.full_item_lookup.values().cloned().collect();
+                        filtered_lm.retain(|v|  {
+                            self.show_ui_state.loot_ref_name_filter.is_empty() || 
+                            v.name.to_lowercase().contains(&self.show_ui_state.loot_ref_name_filter.to_lowercase())
+                        } );
+                        filtered_lm.retain(|v|  {
+                            self.show_ui_state.loot_ref_type_filter.is_empty() || 
+                            self.lm.pickup_type_lookup_rev[&v.type_of_pickup].to_lowercase().contains(&self.show_ui_state.loot_ref_type_filter.to_lowercase())
+                        } );
+                        filtered_lm.sort_by_key(|x| x.uid);
+
+                        let row_height = 30.0;
+                        let num_rows = filtered_lm.len();
+                        body.rows(row_height, num_rows, |row_index, mut row| {
+                            row.col(|ui| {
+                                ui.label(format!("{}", filtered_lm[row_index].uid));
+                            });
+                            row.col(|ui| {
+                                ui.label(&filtered_lm[row_index].name);
+                            });
+                            row.col(|ui| {
+                                ui.label(&self.lm.pickup_type_lookup_rev[&filtered_lm[row_index].type_of_pickup]);
+                            });
+                            row.col(|ui| {
+                                ui.label(format!("{}", filtered_lm[row_index].cost));
+                            });
+                        })
+                    });
+                });
+    }
 
     pub fn options_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::Window::new("Options")
@@ -291,6 +360,11 @@ impl App {
                     };
                 });
                 ui.menu_button("Inventory", |ui| {
+                    if ui.button("Loot reference").clicked() {
+                        self.show_ui_state.loot_ref_window = !self.show_ui_state.loot_ref_window;
+                        ui.close_menu();
+
+                    };
                     if ui.button("Give me 800 qty!").clicked() {
                         set_save_items_qty_800(&mut self.sm, &self.lm, Some(&self.arm));
                         self.update_allitems_fromref();
@@ -343,15 +417,17 @@ impl App {
                 .striped(true)
                 .resizable(false)
                 .cell_layout(egui::Layout::centered_and_justified(egui::Direction::TopDown))
-                .column(Column::exact(40.0))
-                .column(Column::exact(65.0))
-                .column(Column::exact(65.0))
-                .column(Column::exact(65.0))
-                .column(Column::exact(65.0))
-                .column(Column::exact(65.0))
+                .column(Column::initial(40.0).at_least(40.0))
+                .column(Column::initial(65.0).at_least(65.0))
+                .column(Column::initial(65.0).at_least(65.0))
+                .column(Column::initial(65.0).at_least(65.0))
+                .column(Column::initial(65.0).at_least(65.0))
+                .column(Column::initial(65.0).at_least(65.0))
                 .column(Column::initial(160.0).range(40.0..=200.0).resizable(true))
                 .column(Column::initial(160.0).range(40.0..=200.0).resizable(true))
-                .column(Column::exact(40.0))
+                .column(Column::initial(40.0).at_least(40.0))
+                .column(Column::initial(20.0).at_least(20.0))
+                .column(Column::initial(20.0).at_least(20.0))
                 .min_scrolled_height(0.0);
 
             table
@@ -383,13 +459,46 @@ impl App {
                     header.col(|ui| {
                         ui.strong("Cost");
                     });
+                    header.col(|ui| {
+                        ui.strong("");
+                    });
+                    header.col(|ui| {
+                        ui.strong("");
+                    });
                 })
                 .body(|body| {
                     let row_height = 30.0;
                     let num_rows = self.save_inventory_items.len();
                     body.rows(row_height, num_rows, |row_index, mut row| {
                         row.col(|ui| {
-                            ui.label(self.save_inventory_items[row_index].uid.to_string());
+                            // ui.label(self.save_inventory_items[row_index].uid.to_string());
+
+                            let dragvalue_response = ui.add(egui::DragValue::new(&mut self.save_inventory_items[row_index].uid));
+                            if dragvalue_response.changed() {
+                                let new_uid = self.save_inventory_items[row_index].save_item_ref.set_uid(
+                                    &mut self.sm, 
+                                    self.save_inventory_items[row_index].uid);
+                                self.save_inventory_items[row_index].uid = new_uid;
+                            };
+
+                            // let combo_response = egui::ComboBox::from_id_source(row_index)
+                            //     .selected_text(format!("{}|{}", 
+                            //         self.save_inventory_items[row_index].uid, 
+                            //         self.save_inventory_items[row_index].name))
+                            //     .show_ui(ui, |ui| {
+                            //         for (key, val) in self.lm.full_item_lookup.iter() {
+                            //             ui.selectable_value(
+                            //                 &mut self.save_inventory_items[row_index].uid, 
+                            //                 *key, 
+                            //                 format!("{}|{}|{}", *key, val.name, self.lm.pickup_type_lookup_rev[&val.type_of_pickup])
+                            //             );
+                            //         };
+                                    
+                            //     });
+                            // if combo_response.response.changed() {
+                            //     self.save_inventory_items[row_index].save_item_ref.set_uid(&mut self.sm, self.save_inventory_items[row_index].uid);
+                            // };
+
                         });
                         for count_index in 0..5 {
                             row.col(|ui| {
@@ -400,7 +509,7 @@ impl App {
                                         self.save_inventory_items[row_index].counts[count_index].count, 
                                         &mut self.sm, 
                                         Some(&self.lm));
-                                        self.save_inventory_items[row_index].counts[count_index].count = new_count;
+                                    self.save_inventory_items[row_index].counts[count_index].count = new_count;
                                 };
                             });
                         };
@@ -412,6 +521,32 @@ impl App {
                         });
                         row.col(|ui| {
                             ui.label(self.save_inventory_items[row_index].cost.to_string());
+                        });
+                        row.col(|ui| {
+                            if ui.add_sized([20.0, 20.0], egui::Button::new("+")).clicked() {
+                                let result_copy_new = self.save_inventory_items[row_index].save_item_ref.copy_new(&mut self.sm, savedata::LocationItemRef::Inventory);
+                                match result_copy_new {
+                                    Ok(siir) => {
+                                        self.save_inventory_items.insert(row_index, AppSaveInventoryItem::new(&siir, &self.sm, &self.lm));
+                                    },
+                                    Err(_e) => {
+                                        self.show_ui_state.error_msg.push_str("Error unable to copy to new inventory item."); 
+                                    }
+                                }
+                            };
+                        });
+                        row.col(|ui| {
+                            if ui.add_sized([20.0, 20.0], egui::Button::new("-")).clicked() {
+                                let result_remove = self.save_inventory_items[row_index].save_item_ref.remove(&mut self.sm, savedata::LocationItemRef::Inventory);
+                                match result_remove {
+                                    Ok(_) => {
+                                        self.save_inventory_items.remove(row_index);
+                                    },
+                                    Err(_e) => {
+                                        self.show_ui_state.error_msg.push_str("Error unable to remove inventory item."); 
+                                    }
+                                }
+                            };
                         });
                     })
                 })
@@ -441,6 +576,7 @@ impl eframe::App for App {
         if self.show_ui_state.top_panel {self.bottom_panel(ctx, frame)};
         if self.show_ui_state.central_panel {self.central_panel(ctx, frame)};
         if self.show_ui_state.options_window {self.options_window(ctx, frame)};
+        if self.show_ui_state.loot_ref_window {self.loot_ref_window(ctx, frame)};
 
         frame.set_window_size(ctx.used_size());
     }

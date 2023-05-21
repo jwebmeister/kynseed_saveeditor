@@ -15,8 +15,10 @@ impl std::fmt::Display for SaveDataError {
 
 impl Error for SaveDataError {}
 
-#[derive(Debug, Clone)]
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct SaveInventoryItemRef {
+    pub item_node: xot::Node,
     pub key_int_node: xot::Node,
     pub count_int_nodes: Vec<xot::Node>
 }
@@ -26,6 +28,13 @@ impl SaveInventoryItemRef {
     pub fn get_uid(&self, sm: &SaveDataManager) -> i32 {
         let uid = sm.xtree.text_content_str(self.key_int_node).unwrap().parse::<i32>().unwrap();
         uid
+    }
+
+    pub fn set_uid(&self, sm: &mut SaveDataManager, new_uid: i32) -> i32 {
+        let uid_text = sm.xtree.text_content_mut(self.key_int_node).unwrap();
+        uid_text.set(new_uid.to_string());
+        let uid_as_set = uid_text.get().parse::<i32>().unwrap();
+        uid_as_set
     }
 
     pub fn get_lootitem_ref<'a>(&'a self, sm: &SaveDataManager, lm: &'a LootManager) -> &LootItem {
@@ -68,6 +77,66 @@ impl SaveInventoryItemRef {
         count_as_set
     }
 
+    pub fn remove(&mut self, sm: &mut SaveDataManager, lir: LocationItemRef) -> Result<(), Box<dyn Error>> {
+        let nodeclone = self.clone();
+        match sm.xtree.remove(self.item_node) {
+            Ok(_) => {
+                match lir {
+                    LocationItemRef::Inventory => {sm.save_inventory_ref.retain(|x| *x != nodeclone)},
+                    LocationItemRef::NewLarder => {sm.newlarder_item_ref.retain(|x| *x != nodeclone)},
+                    LocationItemRef::SavedShops => {sm.savedshops_item_ref.retain(|x| *x != nodeclone)}
+                };
+                Ok(())
+            },
+            Err(e) => Err(Box::new(e))
+        }
+    }
+
+    pub fn copy_new(&mut self, sm: &mut SaveDataManager, lir: LocationItemRef) -> Result<SaveInventoryItemRef, Box<dyn Error>> {
+        let nodeclone = sm.xtree.clone(self.item_node);
+        match sm.xtree.insert_after(self.item_node, nodeclone) {
+            Ok(_) => {
+                match lir {
+                    LocationItemRef::Inventory => {
+                        let child = nodeclone;
+                        let child_key_node = sm.get_child_node_from_name( child, "key")
+                            .ok_or_else(|| Box::new(SaveDataError))?;
+                        let child_key_int_node = sm.get_child_node_from_name( child_key_node, "int")
+                            .ok_or_else(|| Box::new(SaveDataError))?;
+
+                        let child_value_node = sm.get_child_node_from_name( child, "value")
+                            .ok_or_else(|| Box::new(SaveDataError))?;
+                        let child_value_inventoryitem_node = sm.get_child_node_from_name( child_value_node, "InventoryItem")
+                            .ok_or_else(|| Box::new(SaveDataError))?;
+                        let child_value_inventoryitem_count_node = sm.get_child_node_from_name( child_value_inventoryitem_node, "Count")
+                            .ok_or_else(|| Box::new(SaveDataError))?;
+                        
+                        let mut child_count_int_nodes: Vec<xot::Node> = Vec::new();
+                        
+                        for maybe_int_node in sm.xtree.children(child_value_inventoryitem_count_node) {
+                            match sm.get_name_from_node( maybe_int_node) {
+                                None => continue,
+                                Some(el_name) => {
+                                    if el_name == "int" {
+                                        child_count_int_nodes.push(maybe_int_node);
+                                        
+                                    }
+                                }
+                            }
+                        };
+
+                        let save_inventory_item_ref = SaveInventoryItemRef{item_node: child, key_int_node: child_key_int_node, count_int_nodes: child_count_int_nodes };
+                        let siir_clone = save_inventory_item_ref.clone();
+                        sm.save_inventory_ref.push(save_inventory_item_ref);
+                        Ok(siir_clone)
+                    },
+                    LocationItemRef::NewLarder => todo!(),
+                    LocationItemRef::SavedShops => todo!(),
+                }
+            },
+            Err(e) => Err(Box::new(e))
+        }
+    }
 
 }
 
@@ -85,6 +154,12 @@ pub struct SaveDataManager {
     pub newlarder_item_ref: Vec<SaveInventoryItemRef>,
     pub savedshops_node: Option<xot::Node>,
     pub savedshops_item_ref: Vec<SaveInventoryItemRef>,
+}
+
+pub enum LocationItemRef {
+    Inventory,
+    NewLarder,
+    SavedShops
 }
 
 impl Default for SaveDataManager {
@@ -221,7 +296,7 @@ impl SaveDataManager {
                 }
             };
 
-            let save_inventory_item_ref = SaveInventoryItemRef{key_int_node: child_key_int_node, count_int_nodes: child_count_int_nodes };
+            let save_inventory_item_ref = SaveInventoryItemRef{item_node: child, key_int_node: child_key_int_node, count_int_nodes: child_count_int_nodes };
             self.save_inventory_ref.push(save_inventory_item_ref);
 
         };
@@ -256,7 +331,7 @@ impl SaveDataManager {
                                 }
                             };
                         };
-                        self.newlarder_item_ref.push(SaveInventoryItemRef{key_int_node: d_key_node, count_int_nodes: d_count_int_nodes });
+                        self.newlarder_item_ref.push(SaveInventoryItemRef{item_node: descendant, key_int_node: d_key_node, count_int_nodes: d_count_int_nodes });
                     }
                 }
             }
@@ -287,7 +362,7 @@ impl SaveDataManager {
                                 }
                             };
                         };
-                        self.savedshops_item_ref.push(SaveInventoryItemRef{key_int_node: d_key_node, count_int_nodes: d_count_int_nodes });
+                        self.savedshops_item_ref.push(SaveInventoryItemRef{item_node: descendant, key_int_node: d_key_node, count_int_nodes: d_count_int_nodes });
                     }
                 }
             }

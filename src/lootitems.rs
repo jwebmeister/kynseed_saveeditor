@@ -27,7 +27,7 @@ impl Error for LootDataError {}
 
 /// # LootItem 
 /// An item as defined by EAItems.txt or AllItems.txt
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LootItem {
     pub uid: i32,
     pub name: String,
