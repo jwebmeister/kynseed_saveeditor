@@ -348,7 +348,10 @@ impl App {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Save").clicked() {
-                        write_savedata(&self.appconfig, &mut self.sm);
+                        match write_savedata(&self.appconfig, &mut self.sm) {
+                            Ok(_) => self.show_ui_state.error_msg = "".to_string(),
+                            Err(e) => self.show_ui_state.error_msg = format!("{}", e)
+                        }
                         ui.close_menu();
                     };
                     if ui.button("Options").clicked() {
@@ -756,14 +759,53 @@ pub fn set_larders_qty_100(sm: &mut savedata::SaveDataManager, lm: &lootitems::L
 
 }
 
-pub fn write_savedata(appconfig: &config::AppConfig, sm: &mut savedata::SaveDataManager) {
+pub fn get_dupe_uids(sm: &savedata::SaveDataManager, lir: savedata::LocationItemRef) -> Vec<i32> {
+    let vec_sir = match lir {
+        savedata::LocationItemRef::Inventory => {&sm.save_inventory_ref},
+        savedata::LocationItemRef::NewLarder => {&sm.newlarder_item_ref},
+        savedata::LocationItemRef::SavedShops => {&sm.savedshops_item_ref},
+    };
+    let mut inv_uids: Vec<i32> = vec_sir.iter().map(|x| x.get_uid(sm)).collect();
+    inv_uids.sort();
+    let mut inv_uids_duped: std::collections::HashSet<i32> = std::collections::HashSet::new();
+    inv_uids.windows(2).for_each(|x| if x[0] == x[1] {inv_uids_duped.insert(x[0]);});
+    Vec::from_iter(inv_uids_duped)
+}
+#[derive(Debug, Clone)]
+pub struct DupeUIDError(String);
+
+impl std::fmt::Display for DupeUIDError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Dupe UIDs {:?}", self.0)
+    }
+}
+
+impl std::error::Error for DupeUIDError {}
+
+pub fn check_dupe_uids(sm: &savedata::SaveDataManager) -> Result<(), DupeUIDError> {
+    let inv_dupe_uids = get_dupe_uids(sm, savedata::LocationItemRef::Inventory);
+    // let newlarder_dupe_uids = get_dupe_uids(sm, savedata::LocationItemRef::NewLarder);
+    // let savedshops_dupe_uids = get_dupe_uids(sm, savedata::LocationItemRef::SavedShops);
+
+    if !inv_dupe_uids.is_empty() {return Err(DupeUIDError{0:format!("Inventory dupe UIDs {:?}", inv_dupe_uids)})};
+    // if !newlarder_dupe_uids.is_empty() {return Err(DupeUIDError{0:format!("NewLarder dupe UIDs {:?}", newlarder_dupe_uids)})};
+    // if !savedshops_dupe_uids.is_empty() {return Err(DupeUIDError{0:format!("SavedShops dupe UIDs {:?}", savedshops_dupe_uids)})};
+
+    Ok(())
+}
+
+pub fn write_savedata(appconfig: &config::AppConfig, sm: &mut savedata::SaveDataManager) -> Result<(), Box<dyn std::error::Error>> {
     backup_save(appconfig).unwrap();
 
+    check_dupe_uids(sm)?;
+
     let outfile_path = PathBuf::from_iter([&appconfig.path_kynseed_saves, &appconfig.filename_kynseed_save]);
-    let outfile = std::fs::File::create(outfile_path).unwrap();
+    let outfile = std::fs::File::create(outfile_path)?;
     let mut outwriter = std::io::BufWriter::new(outfile);
-    writeln!(&mut outwriter, r#"<?xml version="1.0" encoding="utf-8"?>"#).unwrap();
-    sm.xtree.write(sm.root.unwrap(), &mut outwriter).unwrap();
+    writeln!(&mut outwriter, r#"<?xml version="1.0" encoding="utf-8"?>"#)?;
+    sm.xtree.write(sm.root.unwrap(), &mut outwriter)?;
+
+    Ok(())
 }
 
 pub fn backup_save(appconfig: &config::AppConfig) -> Result<u64, std::io::Error> {

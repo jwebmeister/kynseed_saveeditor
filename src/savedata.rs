@@ -82,9 +82,9 @@ impl SaveInventoryItemRef {
         match sm.xtree.remove(self.item_node) {
             Ok(_) => {
                 match lir {
-                    LocationItemRef::Inventory => {sm.save_inventory_ref.retain(|x| *x != nodeclone)},
-                    LocationItemRef::NewLarder => {sm.newlarder_item_ref.retain(|x| *x != nodeclone)},
-                    LocationItemRef::SavedShops => {sm.savedshops_item_ref.retain(|x| *x != nodeclone)}
+                    LocationItemRef::Inventory => {sm.save_inventory_ref.retain(|x| x.item_node != nodeclone.item_node)},
+                    LocationItemRef::NewLarder => {sm.newlarder_item_ref.retain(|x| x.item_node != nodeclone.item_node)},
+                    LocationItemRef::SavedShops => {sm.savedshops_item_ref.retain(|x| x.item_node != nodeclone.item_node)}
                 };
                 Ok(())
             },
