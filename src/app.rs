@@ -798,9 +798,8 @@ pub fn check_dupe_uids(sm: &savedata::SaveDataManager) -> Result<(), DupeUIDErro
 }
 
 pub fn write_savedata(appconfig: &config::AppConfig, sm: &mut savedata::SaveDataManager) -> Result<(), Box<dyn std::error::Error>> {
-    backup_save(appconfig).unwrap();
-
     check_dupe_uids(sm)?;
+    backup_save(appconfig).unwrap();
 
     let outfile_path = PathBuf::from_iter([&appconfig.path_kynseed_saves, &appconfig.filename_kynseed_save]);
     let outfile = std::fs::File::create(outfile_path)?;
