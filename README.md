@@ -18,6 +18,25 @@ Savegame editor for the video game "Kynseed" by PixelCount Studios.
 
 
 ## Version history & features
+### v0.2
+- Inventory table
+    - Create a copy of an existing inventory item, via "+" button.
+    - Editable UID of inventory items, i.e. can change the item type. 
+        - Use with inventory item copy "+" button and "Loot reference" window to add new item types to your inventory.
+    - Remove an existing inventory item, via "-" button.
+    - Note: item quantities are only checked for valid values when you try changing the quantity. 
+        - I suggest tweaking all the quantities if you change an items UID.
+        - From my limited testing, excess (or invalid) quantity of items *shouldn't* break your savegame.
+- Inventory->"Loot reference"
+    - Opens a table listing all items and their UID, name, type, cost.
+    - Filter table items by name, type, via editable text fields in header. 
+        - Searches for items containing text, not case-sensitive. 
+        - Leave blank for all items.
+- Check for duplicate items (same UID) in the inventory upon pressing File->Save. 
+    - Shows an error message with the specific duplicate UIDs, if there are any.
+    - Prevents overwriting save until error is resolved.
+- Updated the valid item quantity checks with latest game patch, e.g. illustrated book.
+
 ### v0.1
 - Inventory table
     - Change quantity of each currently held items, per star rating (1-5).
