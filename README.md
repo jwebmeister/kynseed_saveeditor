@@ -18,6 +18,12 @@ Savegame editor for the video game "Kynseed" by PixelCount Studios.
 
 
 ## Version history & features
+### v0.3
+- Player data
+    - Edit brass count (money)
+    - Edit player characters stats
+    - Edit tool level and xp
+
 ### v0.2
 - Inventory table
     - Create a copy of an existing inventory item, via "+" button.

@@ -140,13 +140,24 @@ impl SaveInventoryItemRef {
 
 }
 
+
+pub struct ToolLevelRef {
+    pub tool_node: xot::Node,
+    pub tool_type_node: xot::Node,
+    pub tool_level_node: xot::Node,
+    pub tool_current_xp_node: xot::Node,
+}
+
 pub struct SaveDataManager {
     pub xtree: xot::Xot,
     pub root: Option<xot::Node>,
     pub doc_el: Option<xot::Node>,
     pub playerdata_node: Option<xot::Node>,
     pub brass_count_node: Option<xot::Node>,
+    pub character_stats_node: Option<xot::Node>,
+    pub stats_nodes: Vec<xot::Node>,
     pub tool_levelling_node: Option<xot::Node>,
+    pub tool_level_ref: Vec<ToolLevelRef>,
     pub inventory_node: Option<xot::Node>,
     pub allitems_node: Option<xot::Node>,
     pub save_inventory_ref: Vec<SaveInventoryItemRef>,
@@ -154,6 +165,7 @@ pub struct SaveDataManager {
     pub newlarder_item_ref: Vec<SaveInventoryItemRef>,
     pub savedshops_node: Option<xot::Node>,
     pub savedshops_item_ref: Vec<SaveInventoryItemRef>,
+
 }
 
 pub enum LocationItemRef {
@@ -170,7 +182,10 @@ impl Default for SaveDataManager {
             doc_el: None,
             playerdata_node: None,
             brass_count_node: None,
+            character_stats_node: None,
+            stats_nodes: Vec::new(),
             tool_levelling_node: None,
+            tool_level_ref: Vec::new(),
             inventory_node: None,
             allitems_node: None,
             save_inventory_ref: Vec::new(),
@@ -189,7 +204,10 @@ impl SaveDataManager {
         self.doc_el = None;
         self.playerdata_node = None;
         self.brass_count_node = None;
+        self.character_stats_node = None;
+        self.stats_nodes.clear();
         self.tool_levelling_node = None;
+        self.tool_level_ref.clear();
         self.inventory_node = None;
         self.allitems_node = None;
         self.save_inventory_ref.clear();
@@ -250,6 +268,18 @@ impl SaveDataManager {
             Some(x) => Some(x),
             None => return Err(Box::new(SaveDataError))
         };
+        self.character_stats_node = match self.get_child_node_from_name(self.playerdata_node.unwrap(), "characterStats") {
+            Some(x) => Some(x),
+            None => return Err(Box::new(SaveDataError))
+        };
+        for c_stats_node in self.xtree.children(self.character_stats_node.unwrap()) {
+            match self.get_name_from_node(c_stats_node) {
+                None => continue,
+                Some(child_el_name) => if !child_el_name.contains("BASE_") {continue}
+            };
+            self.stats_nodes.push(c_stats_node);
+        }
+
         self.tool_levelling_node = match self.get_child_node_from_name(self.playerdata_node.unwrap(), "ToolLevelling") {
             Some(x) => Some(x),
             None => return Err(Box::new(SaveDataError))
@@ -303,6 +333,8 @@ impl SaveDataManager {
 
         self.load_newlarder_data()?;
         self.load_savedshops_data()?;
+
+        self.load_tool_levels()?;
 
         Ok(())
         
@@ -363,6 +395,32 @@ impl SaveDataManager {
                             };
                         };
                         self.savedshops_item_ref.push(SaveInventoryItemRef{item_node: descendant, key_int_node: d_key_node, count_int_nodes: d_count_int_nodes });
+                    }
+                }
+            }
+        };
+        Ok(())
+
+    }
+
+    pub fn load_tool_levels(&mut self) -> Result<(), Box<dyn Error>>{
+        match self.tool_levelling_node {
+            None => return Ok(()),
+            Some(_node) => {}
+        };
+
+        for child in self.xtree.children(self.tool_levelling_node.unwrap()) {
+            match self.get_name_from_node(child) {
+                None => continue,
+                Some(c_name) => {
+                    if c_name == "ToolLevel" {
+                        let c_type_node = self.get_child_node_from_name(child, "type")
+                            .ok_or_else(|| Box::new(SaveDataError))?;
+                        let c_level_node = self.get_child_node_from_name(child, "Level")
+                            .ok_or_else(|| Box::new(SaveDataError))?;
+                        let c_currentxp_node = self.get_child_node_from_name(child, "ExactCurrentXP")
+                            .ok_or_else(|| Box::new(SaveDataError))?;
+                        self.tool_level_ref.push(ToolLevelRef { tool_node: child, tool_type_node: c_type_node, tool_level_node: c_level_node, tool_current_xp_node: c_currentxp_node });
                     }
                 }
             }

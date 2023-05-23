@@ -17,6 +17,7 @@ pub struct ShowUIState {
     central_panel: bool,
     error_during_load: bool,
     error_msg: String,
+    player_data_window: bool,
 }
 
 impl Default for ShowUIState {
@@ -30,8 +31,16 @@ impl Default for ShowUIState {
             central_panel: true,
             error_during_load: false,
             error_msg: "".to_string(),
+            player_data_window: false,
         }
     }
+}
+
+#[derive(Default)]
+pub struct PlayerData {
+    brass: u32,
+    stats: Vec<(usize, String, u8)>,
+    tool_level: Vec<(usize, String, u8, f32)>,
 }
 
 pub struct App {
@@ -41,6 +50,7 @@ pub struct App {
     save_inventory_items: Vec<AppSaveInventoryItem>,
     arm: apothrecipes::ApothRecipeManager,
     show_ui_state: ShowUIState,
+    player_data: PlayerData,
 }
 
 impl App {
@@ -79,6 +89,7 @@ impl App {
         };
 
         let mut save_inventory_items: Vec<AppSaveInventoryItem>  = Vec::new();
+        let mut player_data: PlayerData = PlayerData::default();
 
         match show_ui_state.error_during_load {
             true => {
@@ -95,6 +106,43 @@ impl App {
                     let second = a.name.cmp(&b.name);
                     first.then(second)}
                 );
+
+                player_data.brass = {
+                    match sm.xtree.text_content_str(sm.brass_count_node.unwrap()) {
+                        Some(x) => x.parse().unwrap_or_else(|_| {
+                            sm.clear_data();
+                            show_ui_state.error_msg.push_str("Unable to load save data. Brass."); 
+                            show_ui_state.error_during_load = true;
+                            0
+                            }),
+                        _ => {
+                            sm.clear_data();
+                            show_ui_state.error_msg.push_str("Unable to load save data. Brass."); 
+                            show_ui_state.error_during_load = true;
+                            0
+                        }
+                    }
+                };
+
+                for (idx, item) in sm.stats_nodes.iter().enumerate() {
+                    let stat_name = sm.get_name_from_node(*item);
+                    let stat_val_str = sm.xtree.text_content_str(*item);
+                    if stat_name.is_some() && stat_val_str.is_some() {
+                        let stat_val: u8 = stat_val_str.unwrap().parse().unwrap_or_else(|_| {0});
+                        player_data.stats.push((idx, stat_name.unwrap().to_string(), stat_val));
+                    }
+                };
+
+                for (idx, item) in sm.tool_level_ref.iter().enumerate() {
+                    let tool_name = sm.xtree.text_content_str(item.tool_type_node);
+                    let tool_level_val_str = sm.xtree.text_content_str(item.tool_level_node);
+                    let tool_xp_val_str = sm.xtree.text_content_str(item.tool_current_xp_node);
+                    if tool_name.is_some() && tool_level_val_str.is_some() && tool_xp_val_str.is_some() {
+                        let tool_level_val: u8 = tool_level_val_str.unwrap().parse().unwrap_or_else(|_| {0});
+                        let tool_xp_val: f32 = tool_xp_val_str.unwrap().parse().unwrap_or_else(|_| {0.0});
+                        player_data.tool_level.push((idx, tool_name.unwrap().to_string(), tool_level_val, tool_xp_val));
+                    }
+                };
             }
         }
 
@@ -112,6 +160,7 @@ impl App {
             sm.clear_data();
             lm.clear_data();
             arm.clear_data();
+            player_data = PlayerData::default();
         };
 
         Self {
@@ -121,7 +170,109 @@ impl App {
             save_inventory_items,
             arm,
             show_ui_state,
+            player_data,
         }
+    }
+
+    pub fn reload_data(appconfig: &mut config::AppConfig, lm: &mut lootitems::LootManager, sm: &mut savedata::SaveDataManager, 
+        save_inventory_items: &mut Vec<AppSaveInventoryItem>, arm: &mut apothrecipes::ApothRecipeManager, 
+        show_ui_state_error_during_load: &mut bool, show_ui_state_error_msg: &mut String,
+        player_data: &mut PlayerData
+    ) {
+        let config_filepath = config::get_config_filepath();
+        *appconfig = match confy::load_path(config_filepath.as_path()) {
+            Ok(cfg) => cfg,
+            Err(_e) => {
+                confy::store_path(config_filepath.as_path(), config::AppConfig::default()).unwrap();
+                config::AppConfig::default()
+            }
+        };
+
+        *show_ui_state_error_during_load = false;
+        *show_ui_state_error_msg = "".to_string();
+
+        save_inventory_items.clear();
+        sm.clear_data();
+        lm.clear_data();
+        arm.clear_data();
+        *player_data = PlayerData::default();
+
+        match lm.load_data(&appconfig) {
+            Ok(..) => {},
+            _ => {
+                lm.clear_data();
+                show_ui_state_error_msg.push_str("Unable to load loot data."); 
+                *show_ui_state_error_during_load = true;
+            } 
+        };
+
+        match sm.load_data(&appconfig) {
+            Ok(..) => {},
+            _ => {
+                sm.clear_data();
+                show_ui_state_error_msg.push_str("Unable to load save data."); 
+                *show_ui_state_error_during_load = true;
+            } 
+        };
+
+        match *show_ui_state_error_during_load {
+            true => {},
+            false => {
+                for siir in sm.save_inventory_ref.iter() {
+                    let sii = AppSaveInventoryItem::new(siir, &sm, &lm);
+                    save_inventory_items.push(sii);
+                };
+        
+                save_inventory_items.sort_by(|a,b| 
+                    {let first = a.pickup_type_name.cmp(&b.pickup_type_name);
+                    let second = a.name.cmp(&b.name);
+                    first.then(second)}
+                );
+
+                player_data.brass = {
+                    match sm.xtree.text_content_str(sm.brass_count_node.unwrap()) {
+                        Some(x) => x.parse().unwrap_or_else(|_| {0}),
+                        _ => {0}
+                    }
+                };
+
+                for (idx, item) in sm.stats_nodes.iter().enumerate() {
+                    let stat_name = sm.get_name_from_node(*item);
+                    let stat_val_str = sm.xtree.text_content_str(*item);
+                    if stat_name.is_some() && stat_val_str.is_some() {
+                        let stat_val: u8 = stat_val_str.unwrap().parse().unwrap_or_else(|_| {0});
+                        player_data.stats.push((idx, stat_name.unwrap().to_string(), stat_val));
+                    }
+                };
+
+                for (idx, item) in sm.tool_level_ref.iter().enumerate() {
+                    let tool_name = sm.xtree.text_content_str(item.tool_type_node);
+                    let tool_level_val_str = sm.xtree.text_content_str(item.tool_level_node);
+                    let tool_xp_val_str = sm.xtree.text_content_str(item.tool_current_xp_node);
+                    if tool_name.is_some() && tool_level_val_str.is_some() && tool_xp_val_str.is_some() {
+                        let tool_level_val: u8 = tool_level_val_str.unwrap().parse().unwrap_or_else(|_| {0});
+                        let tool_xp_val: f32 = tool_xp_val_str.unwrap().parse().unwrap_or_else(|_| {0.0});
+                        player_data.tool_level.push((idx, tool_name.unwrap().to_string(), tool_level_val, tool_xp_val));
+                    }
+                };
+            }
+        }
+
+        match arm.load_data(&appconfig) {
+            Ok(..) => {},
+            _ => {
+                arm.clear_data();
+                show_ui_state_error_msg.push_str("Unable to load apoth recipe data, not blocking.");
+            } 
+        }
+
+        if *show_ui_state_error_during_load { 
+            save_inventory_items.clear();
+            sm.clear_data();
+            lm.clear_data();
+            arm.clear_data();
+            *player_data = PlayerData::default();
+        };
     }
 
     pub fn loot_ref_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -188,6 +339,63 @@ impl App {
                 });
     }
 
+    pub fn player_data_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::Window::new("Player Data")
+            .open(&mut self.show_ui_state.player_data_window)
+            .default_width(300.0)
+            .vscroll(true)
+            .show(ctx, |ui| {
+                ui.vertical(|ui| {
+                    ui.horizontal(|contents| {
+                        contents.add(egui::Label::new("Brass"));
+                        let brass_response = contents.add(egui::DragValue::new(&mut self.player_data.brass));
+                        if brass_response.changed() && self.sm.brass_count_node.is_some() {
+                            match self.sm.xtree.text_content_mut(self.sm.brass_count_node.unwrap()) {
+                                Some(brass_mut_text) => brass_mut_text.set(format!("{}", self.player_data.brass)),
+                                None => {},
+                            }
+                        };
+                    });
+
+                    ui.add(egui::Label::new("Player stats"));
+                    for item in self.player_data.stats.iter_mut() {
+                        ui.horizontal(|contents| {
+                            contents.add(egui::Label::new(item.1.clone()));
+                            let stats_response = contents.add(egui::DragValue::new(&mut item.2));
+                            if stats_response.changed() {
+                                match self.sm.xtree.text_content_mut(self.sm.stats_nodes[item.0]) {
+                                    Some(stat_mut_text) => stat_mut_text.set(format!("{}", item.2)),
+                                    None => {},
+                                }
+                            };
+                        });
+                    };
+
+                    ui.add(egui::Label::new("Tool|Level|XP"));
+                    for item in self.player_data.tool_level.iter_mut() {
+                        ui.horizontal(|contents| {
+                            contents.add(egui::Label::new(item.1.clone()));
+                            let tool_level_response = contents.add(egui::DragValue::new(&mut item.2));
+                            if tool_level_response.changed() {
+                                match self.sm.xtree.text_content_mut(self.sm.tool_level_ref[item.0].tool_level_node) {
+                                    Some(tool_level_mut_text) => tool_level_mut_text.set(format!("{}", item.2)),
+                                    None => {},
+                                }
+                            };
+                            let tool_xp_response = contents.add(egui::DragValue::new(&mut item.3));
+                            if tool_xp_response.changed() {
+                                match self.sm.xtree.text_content_mut(self.sm.tool_level_ref[item.0].tool_current_xp_node) {
+                                    Some(tool_xp_mut_text) => tool_xp_mut_text.set(format!("{:.1}", item.3)),
+                                    None => {},
+                                }
+                            };
+                        });
+                    };
+
+                });
+            });
+    }
+
     pub fn options_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::Window::new("Options")
             .open(&mut self.show_ui_state.options_window)
@@ -200,68 +408,10 @@ impl App {
                         confy::store_path(config_filepath.as_path(), self.appconfig.clone()).unwrap();
                     };
                     if contents.button("Reload").clicked() {
-                        let config_filepath = config::get_config_filepath();
-                        self.appconfig = confy::load_path(config_filepath.as_path()).unwrap();
-
-                        self.show_ui_state.error_during_load = false;
-                        self.show_ui_state.error_msg = "".to_string();
-
-                        self.save_inventory_items.clear();
-                        self.sm.clear_data();
-                        self.lm.clear_data();
-                        self.arm.clear_data();
-
-                        match self.lm.load_data(&self.appconfig) {
-                            Ok(..) => {},
-                            _ => {
-                                self.lm.clear_data();
-                                self.show_ui_state.error_msg.push_str("Unable to load loot data."); 
-                                self.show_ui_state.error_during_load = true;
-                            } 
-                        };
-
-                        
-                        match self.sm.load_data(&self.appconfig) {
-                            Ok(..) => {},
-                            _ => {
-                                self.sm.clear_data();
-                                self.show_ui_state.error_msg.push_str("Unable to load save data."); 
-                                self.show_ui_state.error_during_load = true;
-                            } 
-                        };
-
-                        match self.show_ui_state.error_during_load {
-                            true => {
-                                self.save_inventory_items.clear();
-                            },
-                            false => {
-                                for siir in self.sm.save_inventory_ref.iter() {
-                                    let sii = AppSaveInventoryItem::new(siir, &self.sm, &self.lm);
-                                    self.save_inventory_items.push(sii);
-                                };
-                        
-                                self.save_inventory_items.sort_by(|a,b| 
-                                    {let first = a.pickup_type_name.cmp(&b.pickup_type_name);
-                                    let second = a.name.cmp(&b.name);
-                                    first.then(second)}
-                                );
-                            }
-                        }
-
-                        match self.arm.load_data(&self.appconfig) {
-                            Ok(..) => {},
-                            _ => {
-                                self.arm.clear_data();
-                                self.show_ui_state.error_msg.push_str("Unable to load apoth recipe data, not blocking.");
-                            }
-                        };
-
-                        if self.show_ui_state.error_during_load { 
-                            self.save_inventory_items.clear();
-                            self.sm.clear_data();
-                            self.lm.clear_data();
-                            self.arm.clear_data();
-                        };
+                        Self::reload_data(&mut self.appconfig, &mut self.lm, &mut self.sm, 
+                            &mut self.save_inventory_items, &mut self.arm, 
+                            &mut self.show_ui_state.error_during_load, &mut self.show_ui_state.error_msg, 
+                            &mut self.player_data)
 
                     };
                     if contents.button("Reset to default").clicked() {
@@ -362,6 +512,7 @@ impl App {
                         frame.close();
                     };
                 });
+                if ui.button("Player data").clicked() {self.show_ui_state.player_data_window = !self.show_ui_state.player_data_window;};
                 ui.menu_button("Inventory", |ui| {
                     if ui.button("Loot reference").clicked() {
                         self.show_ui_state.loot_ref_window = !self.show_ui_state.loot_ref_window;
@@ -576,6 +727,7 @@ impl eframe::App for App {
             save_inventory_items: _,
             arm: _,
             show_ui_state: _,
+            player_data: _,
         } = self;
         
         if self.show_ui_state.top_panel {self.top_panel(ctx, frame)};
@@ -583,6 +735,7 @@ impl eframe::App for App {
         if self.show_ui_state.central_panel {self.central_panel(ctx, frame)};
         if self.show_ui_state.options_window {self.options_window(ctx, frame)};
         if self.show_ui_state.loot_ref_window {self.loot_ref_window(ctx, frame)};
+        if self.show_ui_state.player_data_window {self.player_data_window(ctx, frame)};
 
         frame.set_window_size(ctx.used_size());
     }
