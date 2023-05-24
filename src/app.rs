@@ -18,6 +18,8 @@ pub struct ShowUIState {
     error_during_load: bool,
     error_msg: String,
     player_data_window: bool,
+
+    inventory_tree_window: bool,
 }
 
 impl Default for ShowUIState {
@@ -32,6 +34,8 @@ impl Default for ShowUIState {
             error_during_load: false,
             error_msg: "".to_string(),
             player_data_window: false,
+
+            inventory_tree_window: false,
         }
     }
 }
@@ -275,6 +279,40 @@ impl App {
         };
     }
 
+    pub fn inventory_tree_child_ui(ui: &mut egui::Ui, item: &mut savedata::SaveNodeTree, xtree: &mut xot::Xot,
+        siir: &mut Vec<AppSaveInventoryItem>, lm: &lootitems::LootManager) // todo: invtree and appsaveitem dependancy
+    {
+        egui::CollapsingHeader::new(&item.1)
+            .id_source(item.0)
+            .show(ui, |body| {
+                if item.3 {
+                    if body.text_edit_singleline(&mut item.2).changed() {
+                        item.set_str_from_self(xtree);
+                        
+                        siir.iter_mut().for_each(|x| x.update_fromref_xt(xtree, lm)); // todo: invtree and appsaveitem dependancy
+                    };
+                };
+                if !item.4.is_empty() {
+                    for child in item.4.iter_mut() {
+                        Self::inventory_tree_child_ui(body, child, xtree, siir, lm)
+                    }
+                };
+            });
+    }
+
+    pub fn inventory_tree_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::Window::new("Inventory Tree")
+            .open(&mut self.show_ui_state.inventory_tree_window)
+            .default_width(300.0)
+            .vscroll(true)
+            .show(ctx, |ui| {
+                if let Some(item) = &mut self.sm.inventory_tree {
+                    Self::inventory_tree_child_ui(ui, item, &mut self.sm.xtree, 
+                        &mut self.save_inventory_items,  &self.lm); // todo: invtree and appsaveitem dependancy
+                };
+            });
+    }
+
     pub fn loot_ref_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         use egui_extras::{Column, TableBuilder};
         egui::Window::new("Loot reference")
@@ -339,7 +377,7 @@ impl App {
                 });
     }
 
-    pub fn player_data_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    pub fn player_data_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) { // todo: change into tables
         egui::Window::new("Player Data")
             .open(&mut self.show_ui_state.player_data_window)
             .default_width(300.0)
@@ -514,6 +552,11 @@ impl App {
                 });
                 if ui.button("Player data").clicked() {self.show_ui_state.player_data_window = !self.show_ui_state.player_data_window;};
                 ui.menu_button("Inventory", |ui| {
+                    if ui.button("Inventory tree").clicked() {
+                        self.show_ui_state.inventory_tree_window = !self.show_ui_state.inventory_tree_window;
+                        ui.close_menu();
+
+                    };
                     if ui.button("Loot reference").clicked() {
                         self.show_ui_state.loot_ref_window = !self.show_ui_state.loot_ref_window;
                         ui.close_menu();
@@ -636,6 +679,10 @@ impl App {
                                 self.save_inventory_items[row_index].name = self.lm.full_item_lookup[&new_uid].name.clone();
                                 self.save_inventory_items[row_index].pickup_type_name = self.lm.pickup_type_lookup_rev[&self.lm.full_item_lookup[&new_uid].type_of_pickup].clone();
                                 self.save_inventory_items[row_index].cost = self.lm.full_item_lookup[&new_uid].cost;
+
+                                if let Some(x) = &mut self.sm.inventory_tree { // todo: invtree and appsaveitem dependancy
+                                    x.update_all_strings(&self.sm.xtree);
+                                };
                             };
 
                             // let combo_response = egui::ComboBox::from_id_source(row_index)
@@ -667,6 +714,10 @@ impl App {
                                         &mut self.sm, 
                                         Some(&self.lm));
                                     self.save_inventory_items[row_index].counts[count_index].count = new_count;
+
+                                    if let Some(x) = &mut self.sm.inventory_tree { // todo: invtree and appsaveitem dependancy
+                                        x.update_all_strings(&self.sm.xtree);
+                                    };
                                 };
                             });
                         };
@@ -685,6 +736,9 @@ impl App {
                                 match result_copy_new {
                                     Ok(siir) => {
                                         self.save_inventory_items.insert(row_index, AppSaveInventoryItem::new(&siir, &self.sm, &self.lm));
+                                        if let Some(x) = &mut self.sm.inventory_tree { // todo: invtree and appsaveitem dependancy
+                                            x.reload_data(&self.sm.xtree);
+                                        };
                                     },
                                     Err(_e) => {
                                         self.show_ui_state.error_msg.push_str("Error unable to copy to new inventory item."); 
@@ -698,6 +752,9 @@ impl App {
                                 match result_remove {
                                     Ok(_) => {
                                         self.save_inventory_items.remove(row_index);
+                                        if let Some(x) = &mut self.sm.inventory_tree { // todo: invtree and appsaveitem dependancy
+                                            x.reload_data(&self.sm.xtree);
+                                        };
                                     },
                                     Err(_e) => {
                                         self.show_ui_state.error_msg.push_str("Error unable to remove inventory item."); 
@@ -736,6 +793,7 @@ impl eframe::App for App {
         if self.show_ui_state.options_window {self.options_window(ctx, frame)};
         if self.show_ui_state.loot_ref_window {self.loot_ref_window(ctx, frame)};
         if self.show_ui_state.player_data_window {self.player_data_window(ctx, frame)};
+        if self.show_ui_state.inventory_tree_window {self.inventory_tree_window(ctx, frame)};
 
         frame.set_window_size(ctx.used_size());
     }
@@ -799,6 +857,16 @@ impl AppSaveInventoryItem {
         self.uid = sir.get_uid(sm);
         self.counts = sir.get_counts(sm).map(SaveInventoryItemCount::new);
         let li = sir.get_lootitem_ref(sm,lm);
+        self.name = li.name.to_string();
+        self.pickup_type_name = lm.pickup_type_lookup_rev[&li.type_of_pickup].to_string();
+        self.cost = li.cost;
+    }
+
+    pub fn update_fromref_xt(&mut self, xtree: &xot::Xot, lm: &lootitems::LootManager) {
+        let sir = &self.save_item_ref;
+        self.uid = sir.get_uid_xt(xtree);
+        self.counts = sir.get_counts_xt(xtree).map(SaveInventoryItemCount::new);
+        let li = sir.get_lootitem_ref_xt(xtree,lm);
         self.name = li.name.to_string();
         self.pickup_type_name = lm.pickup_type_lookup_rev[&li.type_of_pickup].to_string();
         self.cost = li.cost;

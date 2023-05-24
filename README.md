@@ -14,10 +14,18 @@ Savegame editor for the video game "Kynseed" by PixelCount Studios.
 - Run "kynseed_saveeditor.exe" from within the Kynseed game folder.  
     - It will prompt in the bottom status bar if there are any errors.  
     - You can make changes to the editors settings within the File->Options menu, or change the .toml file generated after first run of the editor.
-- NOTE: The savegame editor needs access to folders and files from within your Kynseed game folder (specifically read to ".\Data", read-write to ".\Saves", folders and files) in order to function correctly.
+- NOTE: The savegame editor needs access to folders and files from within your Kynseed game folder (specifically read to ".\Data" folder and files, read-write to ".\Saves" folder and files, and create-read-write to ".\saveedit_appconfig.toml") in order to function correctly.
 
 
 ## Version history & features
+### v0.4
+- Inventory->"Inventory tree"
+    - Edit all data values under the inventory node of the savegame.
+    - Notes: 
+        - No validation checks using the Inventory tree, it's direct text editing.
+        - You can mess up your savegame by inputting invalid values.
+        - Cannot add or remove nodes within the tree (for now), but changes in the "central panel" inventory should reflect in the "Inventory tree", and vice versa.
+
 ### v0.3
 - Player data
     - Edit brass count (money)
@@ -57,5 +65,5 @@ Savegame editor for the video game "Kynseed" by PixelCount Studios.
     - Default is "Slot1_Autosave.xml".
     - Will also make a backup just prior to overwriting.
 - File->Options to change editor settings
-    - Can specify paths and filenames of required data and savegame files. Enable use of use modded game files, also see files within ".\saveedit_data\".
+    - Can specify paths and filenames of required data and savegame files. Enables use of modded game files, also see files within ".\saveedit_data\".
     - Default editor assumes it is run from Kynseed game directory (e.g. "...\steamapps\common\Kynseed\").

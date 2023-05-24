@@ -30,6 +30,11 @@ impl SaveInventoryItemRef {
         uid
     }
 
+    pub fn get_uid_xt(&self, xtree: &xot::Xot) -> i32 {
+        let uid = xtree.text_content_str(self.key_int_node).unwrap().parse::<i32>().unwrap();
+        uid
+    }
+
     pub fn set_uid(&self, sm: &mut SaveDataManager, new_uid: i32) -> i32 {
         let uid_text = sm.xtree.text_content_mut(self.key_int_node).unwrap();
         uid_text.set(new_uid.to_string());
@@ -43,10 +48,26 @@ impl SaveInventoryItemRef {
         &lm.full_item_lookup[&uid] as _
     }
 
+    pub fn get_lootitem_ref_xt<'a>(&'a self, xtree: &xot::Xot, lm: &'a LootManager) -> &LootItem {
+        let uid = self.get_uid_xt(xtree);
+        
+        &lm.full_item_lookup[&uid] as _
+    }
+
     pub fn get_counts(&self, sm: &SaveDataManager) -> [i32; 5] {
         let mut counts: [i32; 5] = [0; 5];
         for (idx, count_ref) in self.count_int_nodes.iter().enumerate() {
             let count_text = sm.xtree.text_content_str(*count_ref).unwrap();
+            let count_int = count_text.parse::<i32>().unwrap();
+            counts[idx] = count_int;
+        };
+        counts
+    }
+
+    pub fn get_counts_xt(&self, xtree: &xot::Xot) -> [i32; 5] {
+        let mut counts: [i32; 5] = [0; 5];
+        for (idx, count_ref) in self.count_int_nodes.iter().enumerate() {
+            let count_text = xtree.text_content_str(*count_ref).unwrap();
             let count_int = count_text.parse::<i32>().unwrap();
             counts[idx] = count_int;
         };
@@ -166,6 +187,7 @@ pub struct SaveDataManager {
     pub savedshops_node: Option<xot::Node>,
     pub savedshops_item_ref: Vec<SaveInventoryItemRef>,
 
+    pub inventory_tree: Option<SaveNodeTree>,
 }
 
 pub enum LocationItemRef {
@@ -193,6 +215,8 @@ impl Default for SaveDataManager {
             newlarder_item_ref: Vec::new(),
             savedshops_node: None,
             savedshops_item_ref: Vec::new(),
+
+            inventory_tree: None,
         }
     }
 }
@@ -216,6 +240,8 @@ impl SaveDataManager {
         self.savedshops_node = None;
         self.savedshops_item_ref.clear();
         self.xtree = xot::Xot::new();
+
+        self.inventory_tree = None;
     }
 
     pub fn load_data(&mut self, appconfig: &AppConfig) -> Result<(), Box<dyn Error>> {
@@ -335,6 +361,8 @@ impl SaveDataManager {
         self.load_savedshops_data()?;
 
         self.load_tool_levels()?;
+
+        self.inventory_tree = Some(SaveNodeTree::new(&self.inventory_node.unwrap(), &self.xtree));
 
         Ok(())
         
@@ -458,4 +486,154 @@ impl SaveDataManager {
         };
         None
     }
+}
+
+// SaveNodeTree(Node, Name, Text Content, b Has Text Content, Children).
+// xtree is xot::Xot which every Node references
+#[derive(Clone)]
+pub struct SaveNodeTree(pub xot::Node, pub String, pub String, pub bool, pub Vec<SaveNodeTree>);
+
+impl SaveNodeTree {
+
+    pub fn new(node: &xot::Node, xtree: &xot::Xot) -> Self {
+        let name: String;
+        let text: String;
+        match Self::get_name_from_node(node, xtree) {
+            Some(s) => {name = s.to_string();},
+            None => {name = String::default();}
+        };
+        match Self::get_str_from_node(node, xtree) {
+            Some(t) => {text = t.to_string();},
+            None => {text = String::default();}
+        };
+        let b_has_text_content = !text.trim().is_empty();
+        let children = Self::get_good_children_from_node(node, xtree);
+        Self {
+            0: node.clone(),
+            1: name,
+            2: text,
+            3: b_has_text_content,
+            4: children,
+        }
+    }
+
+    pub fn reload_data(&mut self, xtree: &xot::Xot) {
+        let name: String;
+        let text: String;
+        match Self::get_name_from_node(&self.0, xtree) {
+            Some(s) => {name = s.to_string();},
+            None => {name = String::default();}
+        };
+        match Self::get_str_from_node(&self.0, xtree) {
+            Some(t) => {text = t.to_string();},
+            None => {text = String::default();}
+        };
+        let b_has_text_content = !text.trim().is_empty();
+        let children = Self::get_good_children_from_node(&self.0, xtree);
+        self.1 = name;
+        self.2 = text;
+        self.3 = b_has_text_content;
+        self.4 = children;
+    }
+
+    pub fn get_good_children_from_node(node: &xot::Node, xtree: &xot::Xot) -> Vec<Self> {
+        let mut good_children: Vec<Self> = vec![];
+        for child in xtree.children(node.clone()) {
+            let mut b_good_child = false;
+            if let Some(c_name) = Self::get_name_from_node(&child, xtree) {
+                if !c_name.trim().is_empty() {b_good_child = true;}
+            };
+            if let Some(c_text) = Self::get_str_from_node(&child, xtree) {
+                if !c_text.trim().is_empty() {b_good_child = true;}
+            };
+            if b_good_child {
+                good_children.push(Self::new(&child, xtree));
+            };
+        };
+        good_children
+    }
+
+    pub fn get_name_from_node<'a>(node: &'a xot::Node, xtree: &'a xot::Xot) -> Option<&'a str> {
+        let node_el_option = xtree.element(*node);
+        match node_el_option {
+            None => None,
+            Some(node_el) => {
+                let (node_el_name, _) = xtree.name_ns_str(node_el.name());
+                Some(node_el_name)
+            }
+        }
+    }
+
+    pub fn get_text_content_from_node<'a>(node: &'a xot::Node, xtree: &'a xot::Xot) -> Option<&'a xot::Text> {
+        xtree.text_content(*node)
+    }
+
+    pub fn get_text_content_mut_from_node<'a>(node: &'a xot::Node, xtree: &'a mut xot::Xot) -> Option<&'a mut xot::Text> {
+        xtree.text_content_mut(*node)
+    }
+
+    pub fn get_str_from_node<'a>(node: &'a xot::Node, xtree: &'a xot::Xot) -> Option<&'a str> {
+        let node_text_option = xtree.text_content(*node);
+        match node_text_option {
+            None => None,
+            Some(node_text) => {
+                Some(node_text.get())
+            }
+        }
+    }
+
+    pub fn set_str_from_node<'a, S: Into<String>>(node: &'a xot::Node, xtree: &'a mut xot::Xot, text: S) -> Option<&'a str> {
+        let node_text_option = xtree.text_content_mut(*node);
+        match node_text_option {
+            None => None,
+            Some(node_text) => {
+                node_text.set(text);
+                Some(node_text.get().clone())
+            }
+        }
+    }
+
+    pub fn update_strings_from_self(&mut self, xtree: &xot::Xot) {
+        if let Some(name) = Self::get_name_from_node(&self.0, xtree) {
+            self.1 = name.to_string();
+        } else {
+            self.1 = String::default();
+        };
+
+        if let Some(text_content) = Self::get_str_from_node(&self.0, xtree) {
+            self.2 = text_content.to_string();
+        } else {
+            self.2 = String::default();
+        };
+    }
+
+    pub fn update_all_strings(&mut self, xtree: &xot::Xot) {
+        self.update_strings_from_self(xtree);
+        self.4.iter_mut().for_each(|child| child.update_all_strings(xtree));
+    }
+
+    pub fn set_str_from_self(&mut self, xtree: &mut xot::Xot) {
+        let return_str = Self::set_str_from_node(&self.0, xtree, self.2.clone());
+        if let Some(x) = return_str {self.2 = x.to_string()} else {self.2 = String::default()};
+    }
+
+    pub fn set_str_from_self_with_check<F>(&mut self, xtree: &mut xot::Xot, check_func: F) 
+        where F: FnOnce(String) -> Option<String>
+    {
+        let desired_val = self.2.clone();
+        let return_str: Option<&str>;
+
+        if let Some(s) = check_func(desired_val) {
+            return_str = Self::set_str_from_node(&self.0, xtree, s);
+        } else {
+            return_str = Self::get_str_from_node(&self.0, xtree);
+        };
+
+        if let Some(x) = return_str {
+            self.2 = x.to_string()
+        } else {
+            self.2 = String::default()
+        };
+    }
+
 }
