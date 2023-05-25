@@ -19,7 +19,7 @@ pub struct ShowUIState {
     error_msg: String,
     player_data_window: bool,
 
-    inventory_tree_window: bool,
+    save_tree_window: bool,
 }
 
 impl Default for ShowUIState {
@@ -35,7 +35,7 @@ impl Default for ShowUIState {
             error_msg: "".to_string(),
             player_data_window: false,
 
-            inventory_tree_window: false,
+            save_tree_window: false,
         }
     }
 }
@@ -178,6 +178,12 @@ impl App {
         }
     }
 
+    pub fn reload_data_helper(&mut self) {
+        Self::reload_data(&mut self.appconfig, &mut self.lm, &mut self.sm, &mut self.save_inventory_items, 
+            &mut self.arm, &mut self.show_ui_state.error_during_load, &mut self.show_ui_state.error_msg, 
+            &mut self.player_data);
+    }
+
     pub fn reload_data(appconfig: &mut config::AppConfig, lm: &mut lootitems::LootManager, sm: &mut savedata::SaveDataManager, 
         save_inventory_items: &mut Vec<AppSaveInventoryItem>, arm: &mut apothrecipes::ApothRecipeManager, 
         show_ui_state_error_during_load: &mut bool, show_ui_state_error_msg: &mut String,
@@ -279,36 +285,129 @@ impl App {
         };
     }
 
-    pub fn inventory_tree_child_ui(ui: &mut egui::Ui, item: &mut savedata::SaveNodeTree, xtree: &mut xot::Xot,
-        siir: &mut Vec<AppSaveInventoryItem>, lm: &lootitems::LootManager) // todo: invtree and appsaveitem dependancy
+    pub fn save_tree_child_ui(ui: &mut egui::Ui, item: &mut savedata::SaveNodeTree, xtree: &mut xot::Xot,
+        siir: &mut Vec<AppSaveInventoryItem>, lm: &lootitems::LootManager, // todo: remove invtree, appsaveitem, playerdata coupling
+        player_data: &mut PlayerData, brass_count_node: &Option<xot::Node>, stats_nodes:&Vec<xot::Node>, tool_level_ref: &Vec<savedata::ToolLevelRef>,
+        show_ui_state_error_msg: &mut String, saveinvref: &mut Vec<savedata::SaveInventoryItemRef>
+        )
     {
-        egui::CollapsingHeader::new(&item.1)
-            .id_source(item.0)
-            .show(ui, |body| {
+        let id = ui.make_persistent_id(item.0);
+        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false)
+            .show_header(ui, |ui| {
+                ui.label(&item.1);
+            })
+            .body(|body| {
                 if item.3 {
                     if body.text_edit_singleline(&mut item.2).changed() {
                         item.set_str_from_self(xtree);
-                        
-                        siir.iter_mut().for_each(|x| x.update_fromref_xt(xtree, lm)); // todo: invtree and appsaveitem dependancy
+                        siir.iter_mut().for_each(|x| x.update_fromref_xt(xtree, lm)); // todo: remove invtree, appsaveitem, playerdata coupling
+                        Self::update_playerdata(player_data, xtree, brass_count_node, stats_nodes, tool_level_ref);
                     };
                 };
-                if !item.4.is_empty() {
-                    for child in item.4.iter_mut() {
-                        Self::inventory_tree_child_ui(body, child, xtree, siir, lm)
-                    }
+                
+                let child_row_num = item.4.len();
+                for child_idx in 0..child_row_num {
+                    let mut child_node_deref: Option<xot::Node> = None;
+                    if let Some(child) = item.4.get_mut(child_idx) {
+                        child_node_deref = Some(child.0.clone());
+
+                        Self::save_tree_child_ui(body, child, xtree, siir, lm, player_data, brass_count_node, stats_nodes, tool_level_ref, 
+                            show_ui_state_error_msg, saveinvref
+                        );
+                    };
+
+                    Self::tree_modify_ui(body, child_node_deref, item, xtree, 
+                        siir, lm, 
+                        player_data, brass_count_node, stats_nodes, tool_level_ref,
+                        show_ui_state_error_msg, saveinvref);
                 };
+                
             });
     }
 
-    pub fn inventory_tree_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::Window::new("Inventory Tree")
-            .open(&mut self.show_ui_state.inventory_tree_window)
+    pub fn tree_modify_ui(ui: &mut egui::Ui, child_node_deref: Option<xot::Node>, item: &mut savedata::SaveNodeTree, xtree: &mut xot::Xot,
+        siir: &mut Vec<AppSaveInventoryItem>, lm: &lootitems::LootManager, // todo: remove invtree, appsaveitem, playerdata coupling
+        player_data: &mut PlayerData, brass_count_node: &Option<xot::Node>, stats_nodes:&Vec<xot::Node>, tool_level_ref: &Vec<savedata::ToolLevelRef,>,
+        show_ui_state_error_msg: &mut String,  saveinvref: &mut Vec<savedata::SaveInventoryItemRef>
+        ) 
+    {
+        ui.horizontal(|body| {
+            body.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |body| {
+                if let Some(node_ref) = child_node_deref {
+                    if body.add_sized([20.0, 20.0], egui::Button::new("+")).clicked() {
+                        match savedata::SaveNodeTree::copy_node(item, xtree, &node_ref) {
+                            Ok(new_node) => {
+                                let mut siir_idx_match: Option<usize> = None;
+                                let mut siir_item_match: Option<&AppSaveInventoryItem> = None;
+                                for (siir_idx, siir_item) in siir.iter().enumerate() {
+                                    if node_ref == siir_item.save_item_ref.item_node {
+                                        siir_idx_match = Some(siir_idx);
+                                        siir_item_match = Some(siir_item);
+                                        break
+                                    };
+                                };
+                                if let Some(siir_idx_match) = siir_idx_match {
+                                    match savedata::SaveDataManager::get_sir_from_item_node(new_node, xtree) {
+                                        Ok(si) => {
+                                            let asii = AppSaveInventoryItem::new_xt(&si, xtree, lm );
+                                            saveinvref.push(si);
+                                            siir.insert(siir_idx_match, asii);
+                                        },
+                                        Err(_e) => *show_ui_state_error_msg = "Could not add item to UI, please save and reload.".to_string(),
+                                    }
+                                };
+                            },
+                            Err(s) => {
+                                *show_ui_state_error_msg = s
+                            },
+                        };
+                    };
+                    if body.add_sized([20.0, 20.0], egui::Button::new("-")).clicked() {
+                        match savedata::SaveNodeTree::remove_node(item, xtree, &node_ref) {
+                            Ok(_) => {
+                                let mut siir_idx_match: Option<usize> = None;
+                                let mut siir_item_match: Option<&AppSaveInventoryItem> = None;
+                                for (siir_idx, siir_item) in siir.iter().enumerate() {
+                                    if node_ref == siir_item.save_item_ref.item_node {
+                                        siir_idx_match = Some(siir_idx);
+                                        siir_item_match = Some(siir_item);
+                                        break
+                                    };
+                                };
+                                if let (Some(siir_idx_match), Some(siir_item_match)) = (siir_idx_match, siir_item_match) {
+                                    let mut si_idx_match: Option<usize> = None;
+                                    for (si_idx, si) in saveinvref.iter().enumerate() {
+                                        if *si == siir_item_match.save_item_ref {
+                                            si_idx_match = Some(si_idx);
+                                        };
+                                    };
+                                    if let Some(si_idx_match) = si_idx_match {
+                                        saveinvref.remove(si_idx_match);
+                                    };
+                                    
+                                    siir.remove(siir_idx_match);
+                                }
+                            },
+                            Err(s) => *show_ui_state_error_msg = s,
+                        };
+                    };
+                };
+            });
+        });
+    }
+
+    pub fn save_tree_window(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::Window::new("Save Tree")
+            .open(&mut self.show_ui_state.save_tree_window)
             .default_width(300.0)
             .vscroll(true)
             .show(ctx, |ui| {
-                if let Some(item) = &mut self.sm.inventory_tree {
-                    Self::inventory_tree_child_ui(ui, item, &mut self.sm.xtree, 
-                        &mut self.save_inventory_items,  &self.lm); // todo: invtree and appsaveitem dependancy
+                if let Some(item) = &mut self.sm.save_tree {
+                    Self::save_tree_child_ui(ui, item, &mut self.sm.xtree, 
+                        &mut self.save_inventory_items,  &self.lm, 
+                        &mut self.player_data, &self.sm.brass_count_node, &self.sm.stats_nodes, &self.sm.tool_level_ref, 
+                        &mut self.show_ui_state.error_msg, &mut self.sm.save_inventory_ref
+                    ); // todo: remove invtree, appsaveitem, playerdata coupling
                 };
             });
     }
@@ -389,7 +488,12 @@ impl App {
                         let brass_response = contents.add(egui::DragValue::new(&mut self.player_data.brass));
                         if brass_response.changed() && self.sm.brass_count_node.is_some() {
                             match self.sm.xtree.text_content_mut(self.sm.brass_count_node.unwrap()) {
-                                Some(brass_mut_text) => brass_mut_text.set(format!("{}", self.player_data.brass)),
+                                Some(brass_mut_text) => {
+                                    brass_mut_text.set(format!("{}", self.player_data.brass));
+                                    if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
+                                        x.update_all_strings(&self.sm.xtree);
+                                    };
+                                },
                                 None => {},
                             }
                         };
@@ -402,7 +506,12 @@ impl App {
                             let stats_response = contents.add(egui::DragValue::new(&mut item.2));
                             if stats_response.changed() {
                                 match self.sm.xtree.text_content_mut(self.sm.stats_nodes[item.0]) {
-                                    Some(stat_mut_text) => stat_mut_text.set(format!("{}", item.2)),
+                                    Some(stat_mut_text) => {
+                                        stat_mut_text.set(format!("{}", item.2));
+                                        if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
+                                            x.update_all_strings(&self.sm.xtree);
+                                        };
+                                    },
                                     None => {},
                                 }
                             };
@@ -416,14 +525,24 @@ impl App {
                             let tool_level_response = contents.add(egui::DragValue::new(&mut item.2));
                             if tool_level_response.changed() {
                                 match self.sm.xtree.text_content_mut(self.sm.tool_level_ref[item.0].tool_level_node) {
-                                    Some(tool_level_mut_text) => tool_level_mut_text.set(format!("{}", item.2)),
+                                    Some(tool_level_mut_text) => {
+                                        tool_level_mut_text.set(format!("{}", item.2));
+                                        if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
+                                            x.update_all_strings(&self.sm.xtree);
+                                        };
+                                },
                                     None => {},
                                 }
                             };
                             let tool_xp_response = contents.add(egui::DragValue::new(&mut item.3));
                             if tool_xp_response.changed() {
                                 match self.sm.xtree.text_content_mut(self.sm.tool_level_ref[item.0].tool_current_xp_node) {
-                                    Some(tool_xp_mut_text) => tool_xp_mut_text.set(format!("{:.1}", item.3)),
+                                    Some(tool_xp_mut_text) => {
+                                        tool_xp_mut_text.set(format!("{:.1}", item.3));
+                                        if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
+                                            x.update_all_strings(&self.sm.xtree);
+                                        };
+                                    },
                                     None => {},
                                 }
                             };
@@ -550,13 +669,8 @@ impl App {
                         frame.close();
                     };
                 });
-                if ui.button("Player data").clicked() {self.show_ui_state.player_data_window = !self.show_ui_state.player_data_window;};
                 ui.menu_button("Inventory", |ui| {
-                    if ui.button("Inventory tree").clicked() {
-                        self.show_ui_state.inventory_tree_window = !self.show_ui_state.inventory_tree_window;
-                        ui.close_menu();
-
-                    };
+                    
                     if ui.button("Loot reference").clicked() {
                         self.show_ui_state.loot_ref_window = !self.show_ui_state.loot_ref_window;
                         ui.close_menu();
@@ -602,6 +716,11 @@ impl App {
                         ui.close_menu();
                     };
                 });
+                if ui.button("Player data").clicked() {self.show_ui_state.player_data_window = !self.show_ui_state.player_data_window;};
+                if ui.button("Save tree").clicked() {
+                    self.show_ui_state.save_tree_window = !self.show_ui_state.save_tree_window;
+                    ui.close_menu();
+                };
             });
         });
     }
@@ -680,29 +799,10 @@ impl App {
                                 self.save_inventory_items[row_index].pickup_type_name = self.lm.pickup_type_lookup_rev[&self.lm.full_item_lookup[&new_uid].type_of_pickup].clone();
                                 self.save_inventory_items[row_index].cost = self.lm.full_item_lookup[&new_uid].cost;
 
-                                if let Some(x) = &mut self.sm.inventory_tree { // todo: invtree and appsaveitem dependancy
+                                if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
                                     x.update_all_strings(&self.sm.xtree);
                                 };
                             };
-
-                            // let combo_response = egui::ComboBox::from_id_source(row_index)
-                            //     .selected_text(format!("{}|{}", 
-                            //         self.save_inventory_items[row_index].uid, 
-                            //         self.save_inventory_items[row_index].name))
-                            //     .show_ui(ui, |ui| {
-                            //         for (key, val) in self.lm.full_item_lookup.iter() {
-                            //             ui.selectable_value(
-                            //                 &mut self.save_inventory_items[row_index].uid, 
-                            //                 *key, 
-                            //                 format!("{}|{}|{}", *key, val.name, self.lm.pickup_type_lookup_rev[&val.type_of_pickup])
-                            //             );
-                            //         };
-                                    
-                            //     });
-                            // if combo_response.response.changed() {
-                            //     self.save_inventory_items[row_index].save_item_ref.set_uid(&mut self.sm, self.save_inventory_items[row_index].uid);
-                            // };
-
                         });
                         for count_index in 0..5 {
                             row.col(|ui| {
@@ -715,7 +815,7 @@ impl App {
                                         Some(&self.lm));
                                     self.save_inventory_items[row_index].counts[count_index].count = new_count;
 
-                                    if let Some(x) = &mut self.sm.inventory_tree { // todo: invtree and appsaveitem dependancy
+                                    if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
                                         x.update_all_strings(&self.sm.xtree);
                                     };
                                 };
@@ -736,7 +836,7 @@ impl App {
                                 match result_copy_new {
                                     Ok(siir) => {
                                         self.save_inventory_items.insert(row_index, AppSaveInventoryItem::new(&siir, &self.sm, &self.lm));
-                                        if let Some(x) = &mut self.sm.inventory_tree { // todo: invtree and appsaveitem dependancy
+                                        if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
                                             x.reload_data(&self.sm.xtree);
                                         };
                                     },
@@ -752,7 +852,7 @@ impl App {
                                 match result_remove {
                                     Ok(_) => {
                                         self.save_inventory_items.remove(row_index);
-                                        if let Some(x) = &mut self.sm.inventory_tree { // todo: invtree and appsaveitem dependancy
+                                        if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
                                             x.reload_data(&self.sm.xtree);
                                         };
                                     },
@@ -770,6 +870,41 @@ impl App {
     pub fn update_allitems_fromref(&mut self) {
         self.save_inventory_items.iter_mut().for_each(|x| x.update_fromref(&self.sm, &self.lm));
     }
+
+    pub fn update_playerdata(player_data: &mut PlayerData, xtree: &xot::Xot, brass_count_node: &Option<xot::Node>,
+        stats_nodes: &Vec<xot::Node>, tool_level_ref: &Vec<savedata::ToolLevelRef>) 
+    {
+        player_data.brass = {
+            match xtree.text_content_str(brass_count_node.unwrap()) {
+                Some(x) => x.parse().unwrap_or_else(|_| {0}),
+                _ => {0}
+            }
+        };
+
+        for (idx, item) in stats_nodes.iter().enumerate() {
+            let stat_val_str = xtree.text_content_str(*item);
+            for stat_item in player_data.stats.iter_mut() {
+                if stat_val_str.is_some() && stat_item.0 == idx {
+                    let stat_val: u8 = stat_val_str.unwrap().parse().unwrap_or_else(|_| {0});
+                    stat_item.2 = stat_val;
+                }
+            }
+        };
+
+        for (idx, item) in tool_level_ref.iter().enumerate() {
+            let tool_level_val_str = xtree.text_content_str(item.tool_level_node);
+            let tool_xp_val_str = xtree.text_content_str(item.tool_current_xp_node);
+            for tool_level_item in player_data.tool_level.iter_mut() {
+                if tool_level_val_str.is_some() && tool_xp_val_str.is_some() && tool_level_item.0 == idx {
+                    let tool_level_val: u8 = tool_level_val_str.unwrap().parse().unwrap_or_else(|_| {0});
+                    let tool_xp_val: f32 = tool_xp_val_str.unwrap().parse().unwrap_or_else(|_| {0.0});
+                    tool_level_item.2 = tool_level_val;
+                    tool_level_item.3 = tool_xp_val;
+                }
+            }
+        };
+    }
+
 }
 
 impl eframe::App for App {
@@ -793,7 +928,7 @@ impl eframe::App for App {
         if self.show_ui_state.options_window {self.options_window(ctx, frame)};
         if self.show_ui_state.loot_ref_window {self.loot_ref_window(ctx, frame)};
         if self.show_ui_state.player_data_window {self.player_data_window(ctx, frame)};
-        if self.show_ui_state.inventory_tree_window {self.inventory_tree_window(ctx, frame)};
+        if self.show_ui_state.save_tree_window {self.save_tree_window(ctx, frame)};
 
         frame.set_window_size(ctx.used_size());
     }
@@ -848,6 +983,26 @@ impl AppSaveInventoryItem {
             name: li_name,
             pickup_type_name: li_pickup_type,
             cost: li.cost,
+            // sprite_idx: li.sprite_idx
+        }
+    }
+
+    pub fn new_xt(save_item_ref: &savedata::SaveInventoryItemRef, xtree: &xot::Xot, lm: &lootitems::LootManager) -> Self {
+        let sir = save_item_ref.clone();
+        let uid = sir.get_uid_xt(xtree);
+        let counts = sir.get_counts_xt(xtree).map(SaveInventoryItemCount::new);
+        let li = sir.get_lootitem_ref_xt(xtree,lm);
+        let li_name = li.name.to_string();
+        let li_pickup_type = lm.pickup_type_lookup_rev[&li.type_of_pickup].to_string();
+        let li_cost = li.cost;
+
+        Self {
+            save_item_ref: sir,
+            uid,
+            counts,
+            name: li_name,
+            pickup_type_name: li_pickup_type,
+            cost: li_cost,
             // sprite_idx: li.sprite_idx
         }
     }

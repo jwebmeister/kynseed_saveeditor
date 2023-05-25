@@ -187,7 +187,7 @@ pub struct SaveDataManager {
     pub savedshops_node: Option<xot::Node>,
     pub savedshops_item_ref: Vec<SaveInventoryItemRef>,
 
-    pub inventory_tree: Option<SaveNodeTree>,
+    pub save_tree: Option<SaveNodeTree>,
 }
 
 pub enum LocationItemRef {
@@ -216,7 +216,7 @@ impl Default for SaveDataManager {
             savedshops_node: None,
             savedshops_item_ref: Vec::new(),
 
-            inventory_tree: None,
+            save_tree: None,
         }
     }
 }
@@ -241,7 +241,7 @@ impl SaveDataManager {
         self.savedshops_item_ref.clear();
         self.xtree = xot::Xot::new();
 
-        self.inventory_tree = None;
+        self.save_tree = None;
     }
 
     pub fn load_data(&mut self, appconfig: &AppConfig) -> Result<(), Box<dyn Error>> {
@@ -362,7 +362,7 @@ impl SaveDataManager {
 
         self.load_tool_levels()?;
 
-        self.inventory_tree = Some(SaveNodeTree::new(&self.inventory_node.unwrap(), &self.xtree));
+        self.save_tree = Some(SaveNodeTree::new(&self.doc_el.unwrap(), &self.xtree));
 
         Ok(())
         
@@ -485,6 +485,67 @@ impl SaveDataManager {
             }
         };
         None
+    }
+
+    pub fn get_name_from_node_xt(xtree: &xot::Xot, node: xot::Node) -> Option<&str> {
+        let node_el_result = xtree.element(node);
+        let node_el_name: &str;
+        match node_el_result {
+            None => None,
+            Some(node_el) => {
+                (node_el_name, _) = xtree.name_ns_str(node_el.name());
+                Some(node_el_name)
+            }
+        }
+    }
+
+    pub fn get_child_node_from_name_xt(xtree: &xot::Xot, parent_node: xot::Node, name: &str) -> Option<xot::Node> {
+        for child in xtree.children(parent_node) {
+            let child_el_name_result = Self::get_name_from_node_xt(xtree, child);
+            // println!("{:?}", child_el_name_result);
+            match child_el_name_result {
+                None => continue,
+                Some(child_el_name) => {
+                    if child_el_name == name {
+                        let child_node = child;
+                        // println!("{:?}", child_el_name);
+                        return Some(child_node);
+                    }
+                }
+            }
+        };
+        None
+    }
+
+    pub fn get_sir_from_item_node(child: xot::Node, xtree: &xot::Xot) -> Result<SaveInventoryItemRef, Box<dyn Error>> {
+        let child_key_node = Self::get_child_node_from_name_xt( xtree, child, "key")
+            .ok_or_else(|| Box::new(SaveDataError))?;
+        let child_key_int_node = Self::get_child_node_from_name_xt( xtree, child_key_node, "int")
+            .ok_or_else(|| Box::new(SaveDataError))?;
+
+        let child_value_node = Self::get_child_node_from_name_xt( xtree, child, "value")
+            .ok_or_else(|| Box::new(SaveDataError))?;
+        let child_value_inventoryitem_node = Self::get_child_node_from_name_xt( xtree, child_value_node, "InventoryItem")
+            .ok_or_else(|| Box::new(SaveDataError))?;
+        let child_value_inventoryitem_count_node = Self::get_child_node_from_name_xt( xtree, child_value_inventoryitem_node, "Count")
+            .ok_or_else(|| Box::new(SaveDataError))?;
+        
+        let mut child_count_int_nodes: Vec<xot::Node> = Vec::new();
+        
+        for maybe_int_node in xtree.children(child_value_inventoryitem_count_node) {
+            match Self::get_name_from_node_xt( xtree, maybe_int_node) {
+                None => continue,
+                Some(el_name) => {
+                    if el_name == "int" {
+                        child_count_int_nodes.push(maybe_int_node);
+                        
+                    }
+                }
+            }
+        };
+
+        let save_inventory_item_ref = SaveInventoryItemRef{item_node: child, key_int_node: child_key_int_node, count_int_nodes: child_count_int_nodes };
+        Ok(save_inventory_item_ref)
     }
 }
 
@@ -634,6 +695,74 @@ impl SaveNodeTree {
         } else {
             self.2 = String::default()
         };
+    }
+
+    pub fn find_parent_childidx_from_node<'a>(root: &'a mut Self, node: &'a xot::Node) -> Result<(&'a mut Self, usize), String> {
+        let mut child_idx: Option<usize> = None;
+
+        if root.0 == *node {return Err("No parent, node is root.".to_string())};
+        if root.4.is_empty() {return Err("No children.".to_string())};
+
+        for (idx, child) in root.4.iter().enumerate() {
+            if child.0 == *node {
+                child_idx = Some(idx); 
+                break;
+            };
+        };
+        if child_idx.is_some() {
+            return Ok((root, child_idx.unwrap()));
+        };
+
+        for child in root.4.iter_mut() {
+            if let Ok(child_result) = Self::find_parent_childidx_from_node(child, node) {
+                return Ok(child_result);
+            } else {
+                continue;
+            }
+        }
+        Err("Could not find node in tree.".to_string())
+    }
+
+    pub fn copy_node(root: &mut Self, xtree: &mut xot::Xot, node: &xot::Node) -> Result<xot::Node, String> {
+        let node_deref = node.clone();
+        let new_node = xtree.clone(node_deref);
+        if let Ok((parent, child_idx)) = Self::find_parent_childidx_from_node(root, &node) {
+            match xtree.insert_after(node_deref, new_node) {
+                Ok(_) => {
+                    let new_tree = Self::new(&new_node, xtree);
+                    parent.4.insert(child_idx, new_tree);
+                    return Ok(new_node);
+                },
+                Err(_) => {
+                    if let Err(_e) = xtree.remove(new_node) {
+                        return Err("Could not add node to tree. Could not remove new unattached node, uh oh!".to_string());
+                    };
+                    return Err("Could not add node to tree.".to_string());
+                }
+            }
+        } else {
+            if let Err(_e) = xtree.remove(new_node) {
+                return Err("Could not find node in tree. Could not remove new unattached node, uh oh!".to_string());
+            }
+            return Err("Could not find node in tree.".to_string());
+        }
+    }
+
+    pub fn remove_node(root: &mut Self, xtree: &mut xot::Xot, node: &xot::Node) -> Result<(), String> {
+        if let Ok((parent, child_idx)) = Self::find_parent_childidx_from_node(root, node) {
+            let node_deref = node.clone();
+            match xtree.remove(node_deref) {
+                Ok(_) => {
+                    parent.4.remove(child_idx);
+                    return Ok(());
+                },
+                Err(_) => {
+                    return Err("Could not remove node.".to_string());
+                }
+            }
+        } else {
+            return Err("Could not find node in tree.".to_string());
+        }
     }
 
 }
