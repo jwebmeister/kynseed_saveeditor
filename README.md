@@ -18,6 +18,9 @@ Savegame editor for the video game "Kynseed" by PixelCount Studios.
 
 
 ## Version history & features
+### v0.5.1
+- Updated dependencies.
+
 ### v0.5
 - "Save tree"
     - View and edit all data values within the savegame.

@@ -1,6 +1,6 @@
 [package]
 name = "kynseed_saveeditor"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,11 +10,11 @@ xot = "0.13"
 csv = "1.2"
 serde = { version = "1.0", features = ["derive"] }
 confy = "0.5"
-strum = { version = "0.24", features = ["derive"] }
+strum = { version = "0.25", features = ["derive"] }
 
-egui = "0.21"
-egui_extras = "0.21"
-eframe = { version = "0.21", default-features = false, features = [
+egui = "0.22"
+egui_extras = "0.22"
+eframe = { version = "0.22", default-features = false, features = [
     #"accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     "wgpu",          # Use the glow rendering backend. Alternative: "wgpu".
