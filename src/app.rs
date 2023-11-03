@@ -484,30 +484,13 @@ impl App {
             .show(ctx, |ui| {
                 ui.vertical(|ui| {
                     ui.horizontal(|contents| {
-                        contents.add(egui::Label::new("Brass"));
-                        let brass_response = contents.add(egui::DragValue::new(&mut self.player_data.brass));
-                        if brass_response.changed() && self.sm.brass_count_node.is_some() {
-                            match self.sm.xtree.text_content_mut(self.sm.brass_count_node.unwrap()) {
-                                Some(brass_mut_text) => {
-                                    brass_mut_text.set(format!("{}", self.player_data.brass));
-                                    if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
-                                        x.update_all_strings(&self.sm.xtree);
-                                    };
-                                },
-                                None => {},
-                            }
-                        };
-                    });
-
-                    ui.add(egui::Label::new("Player stats"));
-                    for item in self.player_data.stats.iter_mut() {
-                        ui.horizontal(|contents| {
-                            contents.add(egui::Label::new(item.1.clone()));
-                            let stats_response = contents.add(egui::DragValue::new(&mut item.2));
-                            if stats_response.changed() {
-                                match self.sm.xtree.text_content_mut(self.sm.stats_nodes[item.0]) {
-                                    Some(stat_mut_text) => {
-                                        stat_mut_text.set(format!("{}", item.2));
+                        contents.columns(2, |columns| {
+                            columns[0].add(egui::Label::new("Brass"));
+                            let brass_response = columns[1].add(egui::DragValue::new(&mut self.player_data.brass));
+                            if brass_response.changed() && self.sm.brass_count_node.is_some() {
+                                match self.sm.xtree.text_content_mut(self.sm.brass_count_node.unwrap()) {
+                                    Some(brass_mut_text) => {
+                                        brass_mut_text.set(format!("{}", self.player_data.brass));
                                         if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
                                             x.update_all_strings(&self.sm.xtree);
                                         };
@@ -516,36 +499,65 @@ impl App {
                                 }
                             };
                         });
+                    });
+
+                    ui.add(egui::Label::new("Player stats"));
+                    for item in self.player_data.stats.iter_mut() {
+                        ui.horizontal(|contents| {
+                            contents.columns(2, |columns| {
+                                columns[0].add(egui::Label::new(item.1.clone()));
+                                let stats_response = columns[1].add(egui::DragValue::new(&mut item.2));
+                                if stats_response.changed() {
+                                    match self.sm.xtree.text_content_mut(self.sm.stats_nodes[item.0]) {
+                                        Some(stat_mut_text) => {
+                                            stat_mut_text.set(format!("{}", item.2));
+                                            if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
+                                                x.update_all_strings(&self.sm.xtree);
+                                            };
+                                        },
+                                        None => {},
+                                    }
+                                };
+                            });
+                        });
                     };
 
-                    ui.add(egui::Label::new("Tool|Level|XP"));
+                    ui.horizontal(|contents| {
+                        contents.columns(3, |columns| {
+                            columns[0].label("Tool");
+                            columns[1].label("Level");
+                            columns[2].label("XP");
+                        });
+                    });
                     for item in self.player_data.tool_level.iter_mut() {
                         ui.horizontal(|contents| {
-                            contents.add(egui::Label::new(item.1.clone()));
-                            let tool_level_response = contents.add(egui::DragValue::new(&mut item.2));
-                            if tool_level_response.changed() {
-                                match self.sm.xtree.text_content_mut(self.sm.tool_level_ref[item.0].tool_level_node) {
-                                    Some(tool_level_mut_text) => {
-                                        tool_level_mut_text.set(format!("{}", item.2));
-                                        if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
-                                            x.update_all_strings(&self.sm.xtree);
-                                        };
-                                },
-                                    None => {},
-                                }
-                            };
-                            let tool_xp_response = contents.add(egui::DragValue::new(&mut item.3));
-                            if tool_xp_response.changed() {
-                                match self.sm.xtree.text_content_mut(self.sm.tool_level_ref[item.0].tool_current_xp_node) {
-                                    Some(tool_xp_mut_text) => {
-                                        tool_xp_mut_text.set(format!("{:.1}", item.3));
-                                        if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
-                                            x.update_all_strings(&self.sm.xtree);
-                                        };
+                            contents.columns(3, |columns| {
+                                columns[0].add(egui::Label::new(item.1.clone()));
+                                let tool_level_response = columns[1].add(egui::DragValue::new(&mut item.2));
+                                if tool_level_response.changed() {
+                                    match self.sm.xtree.text_content_mut(self.sm.tool_level_ref[item.0].tool_level_node) {
+                                        Some(tool_level_mut_text) => {
+                                            tool_level_mut_text.set(format!("{}", item.2));
+                                            if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
+                                                x.update_all_strings(&self.sm.xtree);
+                                            };
                                     },
-                                    None => {},
-                                }
-                            };
+                                        None => {},
+                                    }
+                                };
+                                let tool_xp_response = columns[2].add(egui::DragValue::new(&mut item.3));
+                                if tool_xp_response.changed() {
+                                    match self.sm.xtree.text_content_mut(self.sm.tool_level_ref[item.0].tool_current_xp_node) {
+                                        Some(tool_xp_mut_text) => {
+                                            tool_xp_mut_text.set(format!("{:.1}", item.3));
+                                            if let Some(x) = &mut self.sm.save_tree { // todo: remove invtree, appsaveitem, playerdata coupling
+                                                x.update_all_strings(&self.sm.xtree);
+                                            };
+                                        },
+                                        None => {},
+                                    }
+                                };
+                            });
                         });
                     };
 
