@@ -114,7 +114,7 @@ impl SaveInventoryItemRef {
     }
 
     pub fn copy_new(&mut self, sm: &mut SaveDataManager, lir: LocationItemRef) -> Result<SaveInventoryItemRef, Box<dyn Error>> {
-        let nodeclone = sm.xtree.clone(self.item_node);
+        let nodeclone = sm.xtree.clone_node(self.item_node);
         match sm.xtree.insert_after(self.item_node, nodeclone) {
             Ok(_) => {
                 match lir {
@@ -725,7 +725,7 @@ impl SaveNodeTree {
 
     pub fn copy_node(root: &mut Self, xtree: &mut xot::Xot, node: &xot::Node) -> Result<xot::Node, String> {
         let node_deref = node.clone();
-        let new_node = xtree.clone(node_deref);
+        let new_node = xtree.clone_node(node_deref);
         if let Ok((parent, child_idx)) = Self::find_parent_childidx_from_node(root, &node) {
             match xtree.insert_after(node_deref, new_node) {
                 Ok(_) => {

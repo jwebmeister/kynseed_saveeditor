@@ -458,7 +458,8 @@ impl App {
 
                         let row_height = 30.0;
                         let num_rows = filtered_lm.len();
-                        body.rows(row_height, num_rows, |row_index, mut row| {
+                        body.rows(row_height, num_rows, |mut row| {
+                            let row_index = row.index();
                             row.col(|ui| {
                                 ui.label(format!("{}", filtered_lm[row_index].uid));
                             });
@@ -678,7 +679,7 @@ impl App {
                         ui.close_menu();
                     };
                     if ui.button("Quit").clicked() {
-                        frame.close();
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     };
                 });
                 ui.menu_button("Inventory", |ui| {
@@ -797,7 +798,8 @@ impl App {
                 .body(|body| {
                     let row_height = 30.0;
                     let num_rows = self.save_inventory_items.len();
-                    body.rows(row_height, num_rows, |row_index, mut row| {
+                    body.rows(row_height, num_rows, |mut row| {
+                        let row_index = row.index();
                         row.col(|ui| {
                             // ui.label(self.save_inventory_items[row_index].uid.to_string());
 
@@ -942,7 +944,6 @@ impl eframe::App for App {
         if self.show_ui_state.player_data_window {self.player_data_window(ctx, frame)};
         if self.show_ui_state.save_tree_window {self.save_tree_window(ctx, frame)};
 
-        frame.set_window_size(ctx.used_size());
     }
 }
 

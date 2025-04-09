@@ -16,6 +16,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Kynseed Save Editor",
         native_options,
-        Box::new(|cc| Box::new(app::App::new(cc))),
+        Box::new(|cc| Ok(Box::new(app::App::new(cc)))),
     )
 }
